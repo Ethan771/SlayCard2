@@ -21,6 +21,7 @@ public partial class CardUI : Control
     private bool _isDragging;
     private Vector2 _dragOffset;
     private Vector2 _originalPosition;
+    private float _originalRotation;
     private int _originalZIndex;
 
     public override void _Ready()
@@ -51,8 +52,10 @@ public partial class CardUI : Control
                 _isDragging = true;
                 _dragOffset = GetGlobalMousePosition() - GlobalPosition;
                 _originalPosition = Position;
+                _originalRotation = Rotation;
                 _originalZIndex = ZIndex;
                 ZIndex = 1000;
+                Rotation = 0f;
             }
             else if (_isDragging)
             {
@@ -66,7 +69,7 @@ public partial class CardUI : Control
 
                 if (!shouldPlay)
                 {
-                    Position = _originalPosition;
+                    ResetPosition();
                 }
             }
         }
@@ -79,6 +82,15 @@ public partial class CardUI : Control
     public void ResetPosition()
     {
         Position = _originalPosition;
+        Rotation = _originalRotation;
+    }
+
+    public void SetHomeTransform(Vector2 position, float rotation)
+    {
+        Position = position;
+        Rotation = rotation;
+        _originalPosition = position;
+        _originalRotation = rotation;
     }
 
     private void BuildVisualTree()

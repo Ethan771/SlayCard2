@@ -15,6 +15,9 @@ public partial class CombatManager : Control
     [Signal] public delegate void PlayerDamagedEventHandler(Vector2 worldPosition, int value);
 
     private readonly Random _rng = new();
+    private const float HandArcRadius = 1000f;
+    private const float HandArcAngleSpread = 30f;
+    private static readonly Vector2 HandCenterPosition = new(640, 1400);
 
     private readonly List<CardData> _drawPile = new();
     private readonly List<CardData> _discardPile = new();
@@ -218,15 +221,11 @@ public partial class CombatManager : Control
 
         _handUis.Clear();
 
-        const float cardSpacing = 165f;
-        float startX = 80f;
-
         for (int i = 0; i < _hand.Count; i++)
         {
             CardData card = _hand[i];
             var cardUi = new CardUI
             {
-                Position = new Vector2(startX + i * cardSpacing, 430),
                 MouseFilter = MouseFilterEnum.Stop
             };
 
@@ -235,6 +234,8 @@ public partial class CombatManager : Control
             cardUi.CardReleased += OnCardReleased;
             _handUis.Add(cardUi);
         }
+
+        ApplyHandArcLayout();
     }
 
     private void OnCardReleased(CardUI cardUi, bool shouldPlay)
@@ -302,6 +303,28 @@ public partial class CombatManager : Control
         _enemyLabel.Text = $"{_enemy.DisplayName} HP: {Mathf.Max(0, _enemy.CurrentHealth)}  Block: {_enemyBlock}  {intentText}";
         _energyLabel.Text = $"Energy: {_energy}   Draw: {_drawPile.Count}   Discard: {_discardPile.Count}";
         EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count, _enemy.CurrentHealth);
+    }
+
+    private void ApplyHandArcLayout()
+    {
+        int totalCards = _handUis.Count;
+        if (totalCards == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < totalCards; i++)
+        {
+            float t = totalCards == 1 ? 0.5f : i / (float)(totalCards - 1);
+            float angleDeg = (t - 0.5f) * HandArcAngleSpread;
+            float angleRad = Mathf.DegToRad(-90f + angleDeg);
+
+            float x = HandCenterPosition.X + Mathf.Cos(angleRad) * HandArcRadius;
+            float y = HandCenterPosition.Y + Mathf.Sin(angleRad) * HandArcRadius;
+            float rotation = Mathf.DegToRad(angleDeg * 0.9f);
+
+            _handUis[i].SetHomeTransform(new Vector2(x, y), rotation);
+        }
     }
 
     private void SetHandInteractable(bool enabled)
