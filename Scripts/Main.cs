@@ -42,6 +42,7 @@ public partial class Main : Node
         ConnectSignals();
 
         _mapManager.ShowMap();
+        _mapManager.UpdateNodeStates(_gameManager.CurrentFloorIndex);
         _combatManager.HideCombat();
         _rewardManager.HideRewards();
         ShowEntityVisuals(false);
@@ -53,6 +54,7 @@ public partial class Main : Node
         _gameManager.GoldChanged += _ => RefreshHud();
         _gameManager.PlayerHealthChanged += _ => RefreshHud();
         _gameManager.DeckChanged += RefreshHud;
+        _gameManager.FloorIndexChanged += floorIndex => _mapManager.UpdateNodeStates(floorIndex);
 
         _mapManager.NodeSelected += OnMapNodeSelected;
         _combatManager.CombatWon += OnCombatWon;
@@ -95,6 +97,7 @@ public partial class Main : Node
         _endTurnButton.Visible = false;
         ShowEntityVisuals(false);
         _gameManager.AddGold(15);
+        _gameManager.AdvanceFloor();
         _rewardManager.ShowRewards();
     }
 

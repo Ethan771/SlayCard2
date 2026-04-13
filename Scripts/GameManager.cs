@@ -9,11 +9,13 @@ public partial class GameManager : Node
     [Signal] public delegate void GoldChangedEventHandler(int newGold);
     [Signal] public delegate void PlayerHealthChangedEventHandler(int currentHealth);
     [Signal] public delegate void DeckChangedEventHandler();
+    [Signal] public delegate void FloorIndexChangedEventHandler(int floorIndex);
 
     public List<CardData> Deck { get; } = new();
     public int Gold { get; private set; }
     public int PlayerHealth { get; private set; }
     public int MaxPlayerHealth { get; private set; } = 80;
+    public int CurrentFloorIndex { get; private set; }
 
     public override void _Ready()
     {
@@ -25,6 +27,7 @@ public partial class GameManager : Node
         Deck.Clear();
         Gold = 99;
         PlayerHealth = MaxPlayerHealth;
+        CurrentFloorIndex = 0;
 
         for (int i = 0; i < 5; i++)
         {
@@ -39,6 +42,7 @@ public partial class GameManager : Node
         EmitSignal(SignalName.DeckChanged);
         EmitSignal(SignalName.GoldChanged, Gold);
         EmitSignal(SignalName.PlayerHealthChanged, PlayerHealth);
+        EmitSignal(SignalName.FloorIndexChanged, CurrentFloorIndex);
     }
 
     public void AddCardToDeck(CardData card)
@@ -63,5 +67,11 @@ public partial class GameManager : Node
     {
         PlayerHealth = Mathf.Min(MaxPlayerHealth, PlayerHealth + amount);
         EmitSignal(SignalName.PlayerHealthChanged, PlayerHealth);
+    }
+
+    public void AdvanceFloor()
+    {
+        CurrentFloorIndex += 1;
+        EmitSignal(SignalName.FloorIndexChanged, CurrentFloorIndex);
     }
 }
