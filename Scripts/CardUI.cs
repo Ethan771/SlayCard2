@@ -7,8 +7,13 @@ public partial class CardUI : Control
 {
     [Signal] public delegate void CardReleasedEventHandler(CardUI cardUi, bool shouldPlay);
 
+    private static readonly Color AttackColor = new(0.75f, 0.45f, 0.45f);
+    private static readonly Color BlockColor = new(0.45f, 0.55f, 0.70f);
+    private static readonly Color SkillColor = new(0.50f, 0.65f, 0.50f);
+
     public CardData CardData { get; private set; } = new();
 
+    private ColorRect _backgroundRect = null!;
     private Label _nameLabel = null!;
     private Label _costLabel = null!;
     private Label _descriptionLabel = null!;
@@ -31,6 +36,7 @@ public partial class CardUI : Control
     public void Setup(CardData cardData)
     {
         CardData = cardData;
+        RefreshVisualByType();
         _nameLabel.Text = cardData.DisplayName;
         _costLabel.Text = $"{cardData.Cost}";
         _descriptionLabel.Text = cardData.Description;
@@ -77,13 +83,14 @@ public partial class CardUI : Control
 
     private void BuildVisualTree()
     {
-        var panel = new Panel
+        _backgroundRect = new ColorRect
         {
+            Color = SkillColor,
             MouseFilter = MouseFilterEnum.Ignore,
             Size = new Vector2(150, 220),
             CustomMinimumSize = new Vector2(150, 220)
         };
-        AddChild(panel);
+        AddChild(_backgroundRect);
 
         _costLabel = new Label
         {
@@ -92,9 +99,10 @@ public partial class CardUI : Control
             CustomMinimumSize = new Vector2(30, 30),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            MouseFilter = MouseFilterEnum.Ignore
+            MouseFilter = MouseFilterEnum.Ignore,
+            Modulate = new Color(0.93f, 0.93f, 0.93f)
         };
-        panel.AddChild(_costLabel);
+        AddChild(_costLabel);
 
         _nameLabel = new Label
         {
@@ -102,9 +110,10 @@ public partial class CardUI : Control
             Size = new Vector2(126, 24),
             CustomMinimumSize = new Vector2(126, 24),
             HorizontalAlignment = HorizontalAlignment.Center,
-            MouseFilter = MouseFilterEnum.Ignore
+            MouseFilter = MouseFilterEnum.Ignore,
+            Modulate = new Color(0.97f, 0.97f, 0.97f)
         };
-        panel.AddChild(_nameLabel);
+        AddChild(_nameLabel);
 
         _descriptionLabel = new Label
         {
@@ -112,8 +121,19 @@ public partial class CardUI : Control
             Size = new Vector2(126, 120),
             CustomMinimumSize = new Vector2(126, 120),
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            MouseFilter = MouseFilterEnum.Ignore
+            MouseFilter = MouseFilterEnum.Ignore,
+            Modulate = new Color(0.90f, 0.90f, 0.90f)
         };
-        panel.AddChild(_descriptionLabel);
+        AddChild(_descriptionLabel);
+    }
+
+    private void RefreshVisualByType()
+    {
+        _backgroundRect.Color = CardData.Type switch
+        {
+            CardType.Attack => AttackColor,
+            CardType.Block => BlockColor,
+            _ => SkillColor
+        };
     }
 }
