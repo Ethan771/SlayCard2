@@ -12,6 +12,7 @@ public partial class Main : Node
     private VfxManager _vfxManager = null!;
 
     private Label _hudLabel = null!;
+    private Button _endTurnButton = null!;
 
     public override void _Ready()
     {
@@ -29,6 +30,7 @@ public partial class Main : Node
         AddChild(_rewardManager);
         AddChild(_vfxManager);
 
+        _combatManager.BindGameManager(_gameManager);
         ConnectSignals();
 
         _mapManager.ShowMap();
@@ -46,6 +48,7 @@ public partial class Main : Node
         _mapManager.NodeSelected += OnMapNodeSelected;
         _combatManager.CombatWon += OnCombatWon;
         _combatManager.CombatLost += OnCombatLost;
+        _combatManager.TurnStateChanged += isPlayerTurn => _endTurnButton.Disabled = !isPlayerTurn;
         _combatManager.EnemyDamaged += (position, value) =>
         {
             _vfxManager.PlayFloatingText(position, $"-{value}", Colors.OrangeRed);
@@ -59,6 +62,8 @@ public partial class Main : Node
     private void OnMapNodeSelected(int depth, int lane)
     {
         _mapManager.HideMap();
+        _endTurnButton.Visible = true;
+        _endTurnButton.Disabled = false;
 
         var enemy = new EnemyData(
             $"enemy_{depth}_{lane}",
@@ -73,6 +78,7 @@ public partial class Main : Node
     private void OnCombatWon()
     {
         _combatManager.HideCombat();
+        _endTurnButton.Visible = false;
         _gameManager.AddGold(15);
         _rewardManager.ShowRewards();
     }
@@ -80,6 +86,7 @@ public partial class Main : Node
     private void OnCombatLost()
     {
         _combatManager.HideCombat();
+        _endTurnButton.Visible = false;
         _mapManager.ShowMap();
     }
 
@@ -90,15 +97,8 @@ public partial class Main : Node
             return;
         }
 
-        _gameManager.LoseHealth(value);
         _vfxManager.PlayFloatingText(position, $"-{value}", Colors.Crimson);
         _vfxManager.ShakeScreen();
-
-        if (_gameManager.PlayerHealth <= 0)
-        {
-            _combatManager.HideCombat();
-            _mapManager.ShowMap();
-        }
     }
 
     private void OnRewardPicked(CardData pickedCard)
@@ -121,6 +121,18 @@ public partial class Main : Node
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         canvasLayer.AddChild(_hudLabel);
+
+        _endTurnButton = new Button
+        {
+            Text = "End Turn",
+            Position = new Vector2(1120, 14),
+            Size = new Vector2(140, 36),
+            CustomMinimumSize = new Vector2(140, 36),
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            Visible = false
+        };
+        _endTurnButton.Pressed += () => _combatManager.EndPlayerTurn();
+        canvasLayer.AddChild(_endTurnButton);
     }
 
     private void RefreshHud()

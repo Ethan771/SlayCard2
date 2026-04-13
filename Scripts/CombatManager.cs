@@ -10,6 +10,7 @@ public partial class CombatManager : Control
     [Signal] public delegate void CombatWonEventHandler();
     [Signal] public delegate void CombatLostEventHandler();
     [Signal] public delegate void CombatStateChangedEventHandler(int energy, int drawPile, int discardPile, int enemyHealth);
+    [Signal] public delegate void TurnStateChangedEventHandler(bool isPlayerTurn);
     [Signal] public delegate void EnemyDamagedEventHandler(Vector2 worldPosition, int value);
     [Signal] public delegate void PlayerDamagedEventHandler(Vector2 worldPosition, int value);
 
@@ -25,8 +26,12 @@ public partial class CombatManager : Control
     private Label _energyLabel = null!;
 
     private EnemyData _enemy = null!;
+    private GameManager _gameManager = null!;
     private int _energy;
     private int _playerBlock;
+    private int _enemyBlock;
+    private bool _enemyWillAttack = true;
+    private bool _isPlayerTurn;
 
     public override void _Ready()
     {
@@ -46,6 +51,8 @@ public partial class CombatManager : Control
         _drawPile.Clear();
         _discardPile.Clear();
         _hand.Clear();
+        _enemyBlock = 0;
+        _enemyWillAttack = true;
 
         foreach (CardData card in deck)
         {
@@ -57,6 +64,11 @@ public partial class CombatManager : Control
         UpdateCombatState();
     }
 
+    public void BindGameManager(GameManager gameManager)
+    {
+        _gameManager = gameManager;
+    }
+
     public void HideCombat()
     {
         Visible = false;
@@ -64,15 +76,27 @@ public partial class CombatManager : Control
 
     private void StartPlayerTurn()
     {
+        _isPlayerTurn = true;
         _energy = 3;
         _playerBlock = 0;
         DrawCards(5);
         RebuildHandUi();
+        SetHandInteractable(true);
+        EmitSignal(SignalName.TurnStateChanged, true);
         UpdateCombatState();
     }
 
-    private void EndPlayerTurn()
+    public void EndPlayerTurn()
     {
+        if (!_isPlayerTurn || !Visible)
+        {
+            return;
+        }
+
+        _isPlayerTurn = false;
+        SetHandInteractable(false);
+        EmitSignal(SignalName.TurnStateChanged, false);
+
         foreach (CardData card in _hand)
         {
             _discardPile.Add(card);
@@ -80,15 +104,7 @@ public partial class CombatManager : Control
 
         _hand.Clear();
         RebuildHandUi();
-        EnemyAttack();
-
-        if (_enemy.IsDead())
-        {
-            EmitSignal(SignalName.CombatWon);
-            return;
-        }
-
-        StartPlayerTurn();
+        ExecuteEnemyTurn();
     }
 
     private void DrawCards(int count)
@@ -115,6 +131,11 @@ public partial class CombatManager : Control
 
     private void PlayCard(CardData card)
     {
+        if (!_isPlayerTurn)
+        {
+            return;
+        }
+
         if (card.Cost > _energy)
         {
             return;
@@ -124,8 +145,10 @@ public partial class CombatManager : Control
 
         if (card.Damage > 0)
         {
-            _enemy.CurrentHealth -= card.Damage;
-            EmitSignal(SignalName.EnemyDamaged, _enemyLabel.GlobalPosition, card.Damage);
+            int realDamage = Mathf.Max(0, card.Damage - _enemyBlock);
+            _enemyBlock = Mathf.Max(0, _enemyBlock - card.Damage);
+            _enemy.CurrentHealth -= realDamage;
+            EmitSignal(SignalName.EnemyDamaged, _enemyLabel.GlobalPosition, realDamage);
         }
 
         if (card.Block > 0)
@@ -152,19 +175,38 @@ public partial class CombatManager : Control
         }
     }
 
-    private void EnemyAttack()
+    private async void ExecuteEnemyTurn()
     {
-        int incoming = _enemy.BaseAttack + _rng.Next(0, 3);
-        int finalDamage = Mathf.Max(0, incoming - _playerBlock);
-        _playerBlock = Mathf.Max(0, _playerBlock - incoming);
+        await ToSignal(GetTree().CreateTimer(0.45f), SceneTreeTimer.SignalName.Timeout);
 
-        EmitSignal(SignalName.PlayerDamaged, new Vector2(120, 80), finalDamage);
-        EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count, _enemy.CurrentHealth);
+        if (_enemyWillAttack)
+        {
+            int incoming = _enemy.BaseAttack + _rng.Next(0, 3);
+            int finalDamage = Mathf.Max(0, incoming - _playerBlock);
+            _playerBlock = Mathf.Max(0, _playerBlock - incoming);
 
-        if (finalDamage >= 999)
+            if (finalDamage > 0)
+            {
+                _gameManager.LoseHealth(finalDamage);
+            }
+
+            EmitSignal(SignalName.PlayerDamaged, new Vector2(120, 80), finalDamage);
+        }
+        else
+        {
+            _enemyBlock += 6;
+        }
+
+        _enemyWillAttack = !_enemyWillAttack;
+        UpdateCombatState();
+
+        if (_gameManager.PlayerHealth <= 0)
         {
             EmitSignal(SignalName.CombatLost);
+            return;
         }
+
+        StartPlayerTurn();
     }
 
     private void RebuildHandUi()
@@ -197,6 +239,12 @@ public partial class CombatManager : Control
 
     private void OnCardReleased(CardUI cardUi, bool shouldPlay)
     {
+        if (!_isPlayerTurn)
+        {
+            cardUi.ResetPosition();
+            return;
+        }
+
         if (!shouldPlay)
         {
             cardUi.ResetPosition();
@@ -248,9 +296,20 @@ public partial class CombatManager : Control
 
     private void UpdateCombatState()
     {
-        _enemyLabel.Text = $"{_enemy.DisplayName} HP: {Mathf.Max(0, _enemy.CurrentHealth)}";
+        string intentText = _enemyWillAttack
+            ? $"Intent: Attack {_enemy.BaseAttack}-{_enemy.BaseAttack + 2}"
+            : "Intent: Defend 6";
+        _enemyLabel.Text = $"{_enemy.DisplayName} HP: {Mathf.Max(0, _enemy.CurrentHealth)}  Block: {_enemyBlock}  {intentText}";
         _energyLabel.Text = $"Energy: {_energy}   Draw: {_drawPile.Count}   Discard: {_discardPile.Count}";
         EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count, _enemy.CurrentHealth);
+    }
+
+    private void SetHandInteractable(bool enabled)
+    {
+        foreach (CardUI cardUi in _handUis)
+        {
+            cardUi.MouseFilter = enabled ? MouseFilterEnum.Stop : MouseFilterEnum.Ignore;
+        }
     }
 
     private void Shuffle(List<CardData> list)
