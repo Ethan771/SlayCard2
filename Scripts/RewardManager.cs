@@ -78,6 +78,8 @@ public partial class RewardManager : Control
                 Position = new Vector2(250 + i * 260, 210),
                 MouseFilter = MouseFilterEnum.Stop
             };
+
+            AddChild(cardUi);
             cardUi.Setup(data);
             cardUi.CardReleased += (_, shouldPlay) =>
             {
@@ -89,7 +91,6 @@ public partial class RewardManager : Control
                 EmitSignal(SignalName.RewardPicked, data);
             };
 
-            AddChild(cardUi);
             _optionUis.Add(cardUi);
         }
     }

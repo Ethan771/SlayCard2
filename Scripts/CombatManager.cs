@@ -188,10 +188,9 @@ public partial class CombatManager : Control
                 MouseFilter = MouseFilterEnum.Stop
             };
 
+            _handRoot.AddChild(cardUi);
             cardUi.Setup(card);
             cardUi.CardReleased += OnCardReleased;
-
-            _handRoot.AddChild(cardUi);
             _handUis.Add(cardUi);
         }
     }
