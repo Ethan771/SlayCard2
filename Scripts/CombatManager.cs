@@ -15,9 +15,9 @@ public partial class CombatManager : Control
     [Signal] public delegate void PlayerDamagedEventHandler(Vector2 worldPosition, int value);
 
     private readonly Random _rng = new();
-    private const float HandArcRadius = 1000f;
-    private const float HandArcAngleSpread = 30f;
-    private static readonly Vector2 HandCenterPosition = new(640, 1400);
+    private const float HandArcRadius = 960f;
+    private const float HandArcAngleSpread = 26f;
+    private static readonly Vector2 HandCenterPosition = new(640, 1580);
 
     private readonly List<CardData> _drawPile = new();
     private readonly List<CardData> _discardPile = new();
@@ -268,21 +268,23 @@ public partial class CombatManager : Control
 
         _enemyLabel = new Label
         {
-            Position = new Vector2(530, 90),
+            Position = new Vector2(900, 330),
             Size = new Vector2(260, 40),
             CustomMinimumSize = new Vector2(260, 40),
             HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = MouseFilterEnum.Ignore
         };
+        _enemyLabel.AddThemeFontSizeOverride("font_size", 18);
         AddChild(_enemyLabel);
 
         _energyLabel = new Label
         {
-            Position = new Vector2(30, 30),
-            Size = new Vector2(220, 32),
-            CustomMinimumSize = new Vector2(220, 32),
+            Position = new Vector2(20, 58),
+            Size = new Vector2(360, 32),
+            CustomMinimumSize = new Vector2(360, 32),
             MouseFilter = MouseFilterEnum.Ignore
         };
+        _energyLabel.AddThemeFontSizeOverride("font_size", 18);
         AddChild(_energyLabel);
 
         _handRoot = new Control

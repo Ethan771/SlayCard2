@@ -134,22 +134,24 @@ public partial class Main : Node
 
         _hudLabel = new Label
         {
-            Position = new Vector2(16, 10),
+            Position = new Vector2(20, 20),
             Size = new Vector2(600, 32),
             CustomMinimumSize = new Vector2(600, 32),
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
+        _hudLabel.AddThemeFontSizeOverride("font_size", 18);
         canvasLayer.AddChild(_hudLabel);
 
         _endTurnButton = new Button
         {
             Text = "End Turn",
-            Position = new Vector2(1120, 14),
-            Size = new Vector2(140, 36),
-            CustomMinimumSize = new Vector2(140, 36),
+            Position = new Vector2(1110, 20),
+            Size = new Vector2(150, 40),
+            CustomMinimumSize = new Vector2(150, 40),
             MouseFilter = Control.MouseFilterEnum.Stop,
             Visible = false
         };
+        _endTurnButton.AddThemeFontSizeOverride("font_size", 18);
         _endTurnButton.Pressed += () => _combatManager.EndPlayerTurn();
         canvasLayer.AddChild(_endTurnButton);
 
@@ -170,7 +172,7 @@ public partial class Main : Node
 
         _playerRect = new ColorRect
         {
-            Position = new Vector2(70, 110),
+            Position = new Vector2(150, 360),
             Size = new Vector2(200, 300),
             CustomMinimumSize = new Vector2(200, 300),
             Color = new Color(0.60f, 0.55f, 0.70f),
@@ -180,7 +182,7 @@ public partial class Main : Node
 
         _enemyRect = new ColorRect
         {
-            Position = new Vector2(1010, 110),
+            Position = new Vector2(930, 360),
             Size = new Vector2(200, 300),
             CustomMinimumSize = new Vector2(200, 300),
             Color = new Color(0.65f, 0.50f, 0.50f),
@@ -191,43 +193,49 @@ public partial class Main : Node
         _playerNameLabel = new Label
         {
             Text = "Player",
-            Position = _playerRect.Position + new Vector2(16, 16),
+            Position = _playerRect.Position + new Vector2(16, 122),
             Size = new Vector2(168, 30),
             CustomMinimumSize = new Vector2(168, 30),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.95f, 0.95f, 0.95f)
         };
+        _playerNameLabel.AddThemeFontSizeOverride("font_size", 18);
         _entityLayer.AddChild(_playerNameLabel);
 
         _playerHpLabel = new Label
         {
-            Position = _playerRect.Position + new Vector2(16, 52),
-            Size = new Vector2(168, 30),
-            CustomMinimumSize = new Vector2(168, 30),
+            Position = _playerRect.Position + new Vector2(0, -30),
+            Size = new Vector2(200, 28),
+            CustomMinimumSize = new Vector2(200, 28),
+            HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.90f, 0.90f, 0.90f)
         };
+        _playerHpLabel.AddThemeFontSizeOverride("font_size", 18);
         _entityLayer.AddChild(_playerHpLabel);
 
         _enemyNameLabel = new Label
         {
             Text = "Enemy",
-            Position = _enemyRect.Position + new Vector2(16, 16),
+            Position = _enemyRect.Position + new Vector2(16, 122),
             Size = new Vector2(168, 30),
             CustomMinimumSize = new Vector2(168, 30),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.95f, 0.95f, 0.95f)
         };
+        _enemyNameLabel.AddThemeFontSizeOverride("font_size", 18);
         _entityLayer.AddChild(_enemyNameLabel);
 
         _enemyHpLabel = new Label
         {
-            Position = _enemyRect.Position + new Vector2(16, 52),
-            Size = new Vector2(168, 30),
-            CustomMinimumSize = new Vector2(168, 30),
+            Position = _enemyRect.Position + new Vector2(0, -30),
+            Size = new Vector2(200, 28),
+            CustomMinimumSize = new Vector2(200, 28),
+            HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.90f, 0.90f, 0.90f)
         };
+        _enemyHpLabel.AddThemeFontSizeOverride("font_size", 18);
         _entityLayer.AddChild(_enemyHpLabel);
     }
 
