@@ -15,6 +15,7 @@ public partial class Main : Node
     private Control _topUiContainer = null!;
     private Label _hudLabel = null!;
     private Button _endTurnButton = null!;
+    private Button _autoPlayButton = null!;
 
     private Control _entityLayer = null!;
     private ColorRect _playerRect = null!;
@@ -82,6 +83,7 @@ public partial class Main : Node
         _combatManager.EnemiesStateChanged += OnEnemiesStateChanged;
         _combatManager.EnemyIntentChanged += OnEnemyIntentChanged;
         _combatManager.EnemyKilled += OnEnemyKilled;
+        _combatManager.AutoPlayStateChanged += OnAutoPlayStateChanged;
 
         _combatManager.EnemyDamaged += (position, value) =>
         {
@@ -180,8 +182,8 @@ public partial class Main : Node
         _topUiContainer = new Control
         {
             Position = new Vector2(30, 30),
-            Size = new Vector2(760, 90),
-            CustomMinimumSize = new Vector2(760, 90),
+            Size = new Vector2(980, 90),
+            CustomMinimumSize = new Vector2(980, 90),
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         canvasLayer.AddChild(_topUiContainer);
@@ -205,8 +207,20 @@ public partial class Main : Node
             MouseFilter = Control.MouseFilterEnum.Stop,
             Visible = false
         };
-        _endTurnButton.Pressed += () => _combatManager.EndPlayerTurn();
+        _endTurnButton.Pressed += () => _combatManager.EndPlayerTurnByManual();
         _topUiContainer.AddChild(_endTurnButton);
+
+        _autoPlayButton = new Button
+        {
+            Text = "Auto-Play: OFF",
+            Position = new Vector2(760, 0),
+            Size = new Vector2(190, 40),
+            CustomMinimumSize = new Vector2(190, 40),
+            MouseFilter = Control.MouseFilterEnum.Stop
+        };
+        _autoPlayButton.Pressed += OnAutoPlayTogglePressed;
+        _topUiContainer.AddChild(_autoPlayButton);
+        RefreshAutoPlayButton();
 
         BuildEntityLayer(canvasLayer);
     }
@@ -635,5 +649,25 @@ public partial class Main : Node
         _hudLabel.Text = $"Energy: {_currentEnergy}   HP: {_gameManager.PlayerHealth}/{_gameManager.MaxPlayerHealth}   Gold: {_gameManager.Gold}";
         _playerHpLabel.Text = $"HP: {_gameManager.PlayerHealth}/{_gameManager.MaxPlayerHealth}";
         UpdatePlayerLayout();
+    }
+
+    private void OnAutoPlayTogglePressed()
+    {
+        _combatManager.SetAutoPlaying(!_combatManager.IsAutoPlaying);
+        RefreshAutoPlayButton();
+    }
+
+    private void OnAutoPlayStateChanged(bool isAutoPlaying)
+    {
+        RefreshAutoPlayButton();
+    }
+
+    private void RefreshAutoPlayButton()
+    {
+        bool enabled = _combatManager != null && _combatManager.IsAutoPlaying;
+        _autoPlayButton.Text = enabled ? "Auto-Play: ON" : "Auto-Play: OFF";
+        _autoPlayButton.Modulate = enabled
+            ? new Color(0.55f, 1.0f, 0.55f, 1f)
+            : new Color(1f, 1f, 1f, 1f);
     }
 }

@@ -8,6 +8,7 @@ public partial class CardUI : Control
 {
     [Signal] public delegate void CardReleasedEventHandler(CardUI cardUi, bool shouldPlay, int targetIndex);
     [Signal] public delegate void CardClickedEventHandler(CardUI cardUi);
+    [Signal] public delegate void ManualInteractionEventHandler(CardUI cardUi);
 
     private static readonly Color AttackColor = new(0.75f, 0.45f, 0.45f);
     private static readonly Color BlockColor = new(0.45f, 0.55f, 0.70f);
@@ -64,6 +65,7 @@ public partial class CardUI : Control
         {
             if (mouseButton.Pressed)
             {
+                EmitSignal(SignalName.ManualInteraction, this);
                 _isDragging = true;
                 _dragOffset = GetGlobalMousePosition() - GlobalPosition;
                 _originalPosition = Position;
@@ -120,6 +122,45 @@ public partial class CardUI : Control
         _originalPosition = position;
         _homePosition = position;
         _originalRotation = rotation;
+    }
+
+    public async System.Threading.Tasks.Task SimulatePlay(Node target)
+    {
+        Vector2 targetGlobal = ResolveTargetGlobalPosition(target);
+        int targetIndex = TargetResolver?.Invoke(targetGlobal + Size * 0.5f) ?? -1;
+        bool shouldPlay = CardData.NeedsEnemyTarget() ? targetIndex >= 0 : true;
+
+        _isDragging = false;
+        _isHoverRaised = false;
+        _originalZIndex = ZIndex;
+        ZIndex = 3000;
+        Rotation = 0f;
+
+        var tween = CreateTween();
+        tween.TweenProperty(this, "global_position", targetGlobal, 0.4f)
+            .SetEase(Tween.EaseType.Out)
+            .SetTrans(Tween.TransitionType.Cubic);
+        await ToSignal(tween, Tween.SignalName.Finished);
+
+        EmitSignal(SignalName.CardReleased, this, shouldPlay, targetIndex);
+        QueueFree();
+    }
+
+    private Vector2 ResolveTargetGlobalPosition(Node target)
+    {
+        if (target is Control targetControl)
+        {
+            Vector2 center = targetControl.GlobalPosition + targetControl.Size * 0.5f;
+            return center - Size * 0.5f;
+        }
+
+        if (target is Node2D targetNode2D)
+        {
+            return targetNode2D.GlobalPosition - Size * 0.5f;
+        }
+
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
+        return new Vector2(viewport.X * 0.5f, viewport.Y * 0.35f);
     }
 
     private void OnMouseEntered()

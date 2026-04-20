@@ -16,6 +16,7 @@ public partial class CombatManager : Control
     [Signal] public delegate void EnemyDamagedEventHandler(Vector2 worldPosition, int value);
     [Signal] public delegate void PlayerDamagedEventHandler(Vector2 worldPosition, int value);
     [Signal] public delegate void EnemyKilledEventHandler(int enemyIndex);
+    [Signal] public delegate void AutoPlayStateChangedEventHandler(bool isAutoPlaying);
 
     private readonly Random _rng = new();
     private const float HandArcAngleSpread = 24f;
@@ -40,6 +41,10 @@ public partial class CombatManager : Control
     private int _playerWeakStacks;
     private int _playerVulnerableStacks;
     private bool _isPlayerTurn;
+    private bool _isAutoPlaying;
+    private bool _isAutoLoopRunning;
+
+    public bool IsAutoPlaying => _isAutoPlaying;
 
     public override void _Ready()
     {
@@ -127,6 +132,26 @@ public partial class CombatManager : Control
         UpdateCombatState();
     }
 
+    public void SetAutoPlaying(bool enabled)
+    {
+        if (_isAutoPlaying == enabled)
+        {
+            if (enabled)
+            {
+                TryStartAutoPlayLoop();
+            }
+            return;
+        }
+
+        _isAutoPlaying = enabled;
+        EmitSignal(SignalName.AutoPlayStateChanged, _isAutoPlaying);
+
+        if (_isAutoPlaying)
+        {
+            TryStartAutoPlayLoop();
+        }
+    }
+
     private void StartPlayerTurn()
     {
         _isPlayerTurn = true;
@@ -144,6 +169,7 @@ public partial class CombatManager : Control
         SetHandInteractable(true);
         EmitSignal(SignalName.TurnStateChanged, true);
         UpdateCombatState();
+        TryStartAutoPlayLoop();
     }
 
     public void EndPlayerTurn()
@@ -168,6 +194,16 @@ public partial class CombatManager : Control
         // 玩家回合结束，玩家状态衰减。
         DecayPlayerStatuses();
         ExecuteEnemyTurn();
+    }
+
+    public void EndPlayerTurnByManual()
+    {
+        if (_isAutoPlaying)
+        {
+            SetAutoPlaying(false);
+        }
+
+        EndPlayerTurn();
     }
 
     private void DrawCards(int count)
@@ -515,6 +551,7 @@ public partial class CombatManager : Control
             _handRoot.AddChild(cardUi);
             cardUi.Setup(card);
             cardUi.CardReleased += OnCardReleased;
+            cardUi.ManualInteraction += OnManualCardInteraction;
             _handUis.Add(cardUi);
         }
 
@@ -530,6 +567,195 @@ public partial class CombatManager : Control
         }
 
         PlayCard(cardUi.CardData, targetIndex);
+    }
+
+    private void OnManualCardInteraction(CardUI cardUi)
+    {
+        if (_isAutoPlaying)
+        {
+            SetAutoPlaying(false);
+        }
+    }
+
+    private void TryStartAutoPlayLoop()
+    {
+        if (!_isAutoPlaying || !_isPlayerTurn || !Visible || _isAutoLoopRunning)
+        {
+            return;
+        }
+
+        _ = RunAutoPlayLoop();
+    }
+
+    private async System.Threading.Tasks.Task RunAutoPlayLoop()
+    {
+        _isAutoLoopRunning = true;
+        try
+        {
+            while (_isAutoPlaying && _isPlayerTurn && Visible)
+            {
+                AutoPlayDecision? decision = EvaluateBestCard();
+                if (decision is null)
+                {
+                    await ToSignal(GetTree().CreateTimer(0.5f), SceneTreeTimer.SignalName.Timeout);
+                    if (_isAutoPlaying && _isPlayerTurn)
+                    {
+                        EndPlayerTurn();
+                    }
+                    break;
+                }
+
+                if (!GodotObject.IsInstanceValid(decision.CardUi))
+                {
+                    break;
+                }
+
+                Node flightTarget = decision.TargetNode ?? _handRoot;
+                await decision.CardUi.SimulatePlay(flightTarget);
+                await ToSignal(GetTree().CreateTimer(0.8f), SceneTreeTimer.SignalName.Timeout);
+            }
+        }
+        finally
+        {
+            _isAutoLoopRunning = false;
+        }
+    }
+
+    public AutoPlayDecision? EvaluateBestCard()
+    {
+        if (!_isPlayerTurn || _handUis.Count == 0)
+        {
+            return null;
+        }
+
+        int incomingDamage = EstimateIncomingEnemyDamage();
+        bool needsDefense = incomingDamage > _playerBlock;
+
+        AutoPlayDecision? bestDecision = null;
+        foreach (CardUI cardUi in _handUis)
+        {
+            CardData card = cardUi.CardData;
+            if (card.Cost > _energy)
+            {
+                continue;
+            }
+
+            int targetIndex = -1;
+            Control? targetNode = null;
+            if (card.NeedsEnemyTarget())
+            {
+                targetIndex = SelectBestTargetForCard(card);
+                if (targetIndex < 0 || targetIndex >= ActiveEnemies.Count)
+                {
+                    continue;
+                }
+
+                if (targetIndex < _enemyTargetNodes.Count)
+                {
+                    targetNode = _enemyTargetNodes[targetIndex];
+                }
+            }
+
+            float score = ScoreCard(card, targetIndex, needsDefense);
+            if (bestDecision is null || score > bestDecision.Score)
+            {
+                bestDecision = new AutoPlayDecision(cardUi, targetIndex, targetNode, score);
+            }
+        }
+
+        if (bestDecision is null || bestDecision.Score < 4f)
+        {
+            return null;
+        }
+
+        return bestDecision;
+    }
+
+    private float ScoreCard(CardData card, int targetIndex, bool needsDefense)
+    {
+        float score = 0f;
+        int estimatedDamage = Mathf.Max(0, card.Damage) * Mathf.Max(1, card.HitCount);
+
+        if (needsDefense)
+        {
+            score += card.Block * 13f;
+            if (card.ApplyWeak > 0)
+            {
+                score += 14f + card.ApplyWeak * 5f;
+            }
+
+            score += estimatedDamage * 1.5f;
+        }
+        else
+        {
+            score += estimatedDamage * 5f;
+            if (card.ApplyVulnerable > 0)
+            {
+                score += 16f + card.ApplyVulnerable * 6f;
+            }
+            if (card.ApplyWeak > 0)
+            {
+                score += 9f + card.ApplyWeak * 3f;
+            }
+            score += card.Block * 2.5f;
+        }
+
+        score += card.DrawAmount * 3f;
+        score += card.EnergyAmount * 4f;
+        score -= card.Cost * 1.5f;
+
+        if (targetIndex >= 0 && targetIndex < ActiveEnemies.Count)
+        {
+            int effectiveHp = ActiveEnemies[targetIndex].CurrentHealth + _enemyBlocks[targetIndex];
+            score += Mathf.Max(0, 24 - effectiveHp) * 0.6f;
+        }
+
+        return score;
+    }
+
+    private int EstimateIncomingEnemyDamage()
+    {
+        int total = 0;
+        for (int i = 0; i < ActiveEnemies.Count; i++)
+        {
+            EnemyIntent intent = _enemyIntents[i];
+            if (intent.Type != EnemyIntentType.Attack)
+            {
+                continue;
+            }
+
+            int hitDamage = intent.Damage;
+            if (_enemyWeakStacks[i] > 0)
+            {
+                hitDamage -= 3;
+            }
+            if (_playerVulnerableStacks > 0)
+            {
+                hitDamage += 3;
+            }
+
+            total += Mathf.Max(0, hitDamage) * Mathf.Max(1, intent.HitCount);
+        }
+
+        return total;
+    }
+
+    private int SelectBestTargetForCard(CardData card)
+    {
+        int bestIndex = -1;
+        int bestScore = int.MaxValue;
+        for (int i = 0; i < ActiveEnemies.Count; i++)
+        {
+            int blockPenalty = _enemyBlocks[i] > 0 ? 1000 : 0;
+            int score = blockPenalty + ActiveEnemies[i].CurrentHealth;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
     }
 
     private int ResolveTargetIndex(Vector2 globalMousePos)
@@ -625,6 +851,22 @@ public partial class CombatManager : Control
         foreach (CardUI cardUi in _handUis)
         {
             cardUi.MouseFilter = enabled ? MouseFilterEnum.Stop : MouseFilterEnum.Ignore;
+        }
+    }
+
+    public sealed class AutoPlayDecision
+    {
+        public CardUI CardUi { get; }
+        public int TargetIndex { get; }
+        public Control? TargetNode { get; }
+        public float Score { get; }
+
+        public AutoPlayDecision(CardUI cardUi, int targetIndex, Control? targetNode, float score)
+        {
+            CardUi = cardUi;
+            TargetIndex = targetIndex;
+            TargetNode = targetNode;
+            Score = score;
         }
     }
 
