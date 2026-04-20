@@ -128,6 +128,18 @@ public partial class GameManager : Node
         return false;
     }
 
+    public bool RemovePotionAt(int index)
+    {
+        if (index < 0 || index >= Potions.Count || Potions[index] is null)
+        {
+            return false;
+        }
+
+        Potions[index] = null;
+        EmitSignal(SignalName.PotionsChanged);
+        return true;
+    }
+
     public bool RemoveRandomCardFromDeck()
     {
         if (Deck.Count <= 1)
