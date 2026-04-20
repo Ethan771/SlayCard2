@@ -22,6 +22,7 @@ public partial class CardUI : Control
     private bool _isDragging;
     private Vector2 _dragOffset;
     private Vector2 _originalPosition;
+    private Vector2 _homePosition;
     private float _originalRotation;
     private int _originalZIndex;
 
@@ -33,6 +34,8 @@ public partial class CardUI : Control
         MouseFilter = MouseFilterEnum.Stop;
 
         BuildVisualTree();
+        MouseEntered += OnMouseEntered;
+        MouseExited += OnMouseExited;
     }
 
     public void Setup(CardData cardData)
@@ -91,7 +94,28 @@ public partial class CardUI : Control
         Position = position;
         Rotation = rotation;
         _originalPosition = position;
+        _homePosition = position;
         _originalRotation = rotation;
+    }
+
+    private void OnMouseEntered()
+    {
+        if (_isDragging)
+        {
+            return;
+        }
+
+        Position = _homePosition + new Vector2(0, -18f);
+    }
+
+    private void OnMouseExited()
+    {
+        if (_isDragging)
+        {
+            return;
+        }
+
+        Position = _homePosition;
     }
 
     private void BuildVisualTree()

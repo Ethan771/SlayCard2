@@ -13,6 +13,7 @@ public partial class CombatManager : Control
     [Signal] public delegate void TurnStateChangedEventHandler(bool isPlayerTurn);
     [Signal] public delegate void EnemyDamagedEventHandler(Vector2 worldPosition, int value);
     [Signal] public delegate void PlayerDamagedEventHandler(Vector2 worldPosition, int value);
+    [Signal] public delegate void EnemyIntentChangedEventHandler(string intentText);
 
     private readonly Random _rng = new();
     private const float HandArcAngleSpread = 24f;
@@ -273,6 +274,7 @@ public partial class CombatManager : Control
             MouseFilter = MouseFilterEnum.Ignore
         };
         _enemyLabel.AddThemeFontSizeOverride("font_size", 18);
+        _enemyLabel.Visible = false;
         AddChild(_enemyLabel);
 
         _energyLabel = new Label
@@ -305,6 +307,7 @@ public partial class CombatManager : Control
         _enemyLabel.Position = new Vector2(viewportSize.X * 0.75f - 130f, viewportSize.Y * 0.5f - 190f);
         _enemyLabel.Text = $"{_enemy.DisplayName} HP: {Mathf.Max(0, _enemy.CurrentHealth)}  {intentText}";
         _energyLabel.Text = $"Energy: {_energy}   Draw: {_drawPile.Count}   Discard: {_discardPile.Count}";
+        EmitSignal(SignalName.EnemyIntentChanged, intentText);
         EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count, _enemy.CurrentHealth);
     }
 
@@ -319,14 +322,15 @@ public partial class CombatManager : Control
         for (int i = 0; i < totalCards; i++)
         {
             Vector2 viewportSize = GetViewportRect().Size;
-            float handArcRadius = viewportSize.Y * 0.92f;
-            Vector2 handCenterPosition = new(viewportSize.X * 0.5f, viewportSize.Y * 1.06f);
+            float handArcRadius = viewportSize.Y * 0.88f;
+            Vector2 handCenterPosition = new(viewportSize.X * 0.5f, viewportSize.Y + 200f);
             float t = totalCards == 1 ? 0.5f : i / (float)(totalCards - 1);
             float angleDeg = (t - 0.5f) * HandArcAngleSpread;
             float angleRad = Mathf.DegToRad(-90f + angleDeg);
 
             float x = handCenterPosition.X + Mathf.Cos(angleRad) * handArcRadius;
             float y = handCenterPosition.Y + Mathf.Sin(angleRad) * handArcRadius;
+            y = Mathf.Max(y, viewportSize.Y * 0.6f);
             float rotation = Mathf.DegToRad(angleDeg * 0.9f);
 
             _handUis[i].SetHomeTransform(new Vector2(x, y), rotation);

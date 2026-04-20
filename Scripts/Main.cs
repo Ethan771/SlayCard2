@@ -17,9 +17,11 @@ public partial class Main : Node
     private Control _entityLayer = null!;
     private ColorRect _playerRect = null!;
     private ColorRect _enemyRect = null!;
-    private Label _playerNameLabel = null!;
+    private VBoxContainer _playerInfoBox = null!;
+    private VBoxContainer _enemyInfoBox = null!;
+    private Label _playerIntentLabel = null!;
     private Label _playerHpLabel = null!;
-    private Label _enemyNameLabel = null!;
+    private Label _enemyIntentLabel = null!;
     private Label _enemyHpLabel = null!;
     private int _currentEnemyMaxHealth;
     private int _currentEnergy;
@@ -64,6 +66,7 @@ public partial class Main : Node
         _combatManager.CombatLost += OnCombatLost;
         _combatManager.TurnStateChanged += isPlayerTurn => _endTurnButton.Disabled = !isPlayerTurn;
         _combatManager.CombatStateChanged += OnCombatStateChanged;
+        _combatManager.EnemyIntentChanged += intent => _enemyIntentLabel.Text = intent;
         _combatManager.EnemyDamaged += (position, value) =>
         {
             _vfxManager.PlayFloatingText(position, $"-{value}", Colors.OrangeRed);
@@ -89,7 +92,7 @@ public partial class Main : Node
         );
 
         _currentEnemyMaxHealth = enemy.MaxHealth;
-        _enemyNameLabel.Text = enemy.DisplayName;
+        _enemyIntentLabel.Text = "Intent: ...";
         _enemyHpLabel.Text = $"HP: {enemy.CurrentHealth}/{_currentEnemyMaxHealth}";
         _combatManager.StartCombat(_gameManager.Deck, enemy);
     }
@@ -201,53 +204,73 @@ public partial class Main : Node
         };
         _entityLayer.AddChild(_enemyRect);
 
-        _playerNameLabel = new Label
+        _playerInfoBox = new VBoxContainer
         {
-            Text = "Player",
             Position = Vector2.Zero,
-            Size = new Vector2(168, 30),
-            CustomMinimumSize = new Vector2(168, 30),
+            Size = new Vector2(220, 70),
+            CustomMinimumSize = new Vector2(220, 70),
+            Alignment = BoxContainer.AlignmentMode.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _entityLayer.AddChild(_playerInfoBox);
+
+        _playerIntentLabel = new Label
+        {
+            Text = "Intent: Ready",
+            Size = new Vector2(220, 30),
+            CustomMinimumSize = new Vector2(220, 30),
+            HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.95f, 0.95f, 0.95f)
         };
-        _playerNameLabel.AddThemeFontSizeOverride("font_size", 18);
-        _entityLayer.AddChild(_playerNameLabel);
+        _playerIntentLabel.AddThemeFontSizeOverride("font_size", 18);
+        _playerInfoBox.AddChild(_playerIntentLabel);
 
         _playerHpLabel = new Label
         {
             Position = Vector2.Zero,
-            Size = new Vector2(200, 28),
-            CustomMinimumSize = new Vector2(200, 28),
+            Size = new Vector2(220, 28),
+            CustomMinimumSize = new Vector2(220, 28),
             HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.90f, 0.90f, 0.90f)
         };
         _playerHpLabel.AddThemeFontSizeOverride("font_size", 18);
-        _entityLayer.AddChild(_playerHpLabel);
+        _playerInfoBox.AddChild(_playerHpLabel);
 
-        _enemyNameLabel = new Label
+        _enemyInfoBox = new VBoxContainer
         {
-            Text = "Enemy",
             Position = Vector2.Zero,
-            Size = new Vector2(168, 30),
-            CustomMinimumSize = new Vector2(168, 30),
+            Size = new Vector2(220, 70),
+            CustomMinimumSize = new Vector2(220, 70),
+            Alignment = BoxContainer.AlignmentMode.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _entityLayer.AddChild(_enemyInfoBox);
+
+        _enemyIntentLabel = new Label
+        {
+            Text = "Intent: ...",
+            Size = new Vector2(220, 30),
+            CustomMinimumSize = new Vector2(220, 30),
+            HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.95f, 0.95f, 0.95f)
         };
-        _enemyNameLabel.AddThemeFontSizeOverride("font_size", 18);
-        _entityLayer.AddChild(_enemyNameLabel);
+        _enemyIntentLabel.AddThemeFontSizeOverride("font_size", 18);
+        _enemyInfoBox.AddChild(_enemyIntentLabel);
 
         _enemyHpLabel = new Label
         {
             Position = Vector2.Zero,
-            Size = new Vector2(200, 28),
-            CustomMinimumSize = new Vector2(200, 28),
+            Size = new Vector2(220, 28),
+            CustomMinimumSize = new Vector2(220, 28),
             HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.90f, 0.90f, 0.90f)
         };
         _enemyHpLabel.AddThemeFontSizeOverride("font_size", 18);
-        _entityLayer.AddChild(_enemyHpLabel);
+        _enemyInfoBox.AddChild(_enemyHpLabel);
     }
 
     private void ShowEntityVisuals(bool show)
@@ -277,14 +300,11 @@ public partial class Main : Node
     {
         Vector2 entitySize = _playerRect.Size;
 
-        ApplyAnchoredRect(_playerRect, new Vector2(0.25f, 0.5f), entitySize);
-        ApplyAnchoredRect(_enemyRect, new Vector2(0.75f, 0.5f), entitySize);
+        ApplyAnchoredRect(_playerRect, new Vector2(0.25f, 0.45f), entitySize);
+        ApplyAnchoredRect(_enemyRect, new Vector2(0.75f, 0.45f), entitySize);
 
-        _playerNameLabel.Position = _playerRect.Position + new Vector2(16, entitySize.Y * 0.4f);
-        _enemyNameLabel.Position = _enemyRect.Position + new Vector2(16, entitySize.Y * 0.4f);
-
-        ApplyAnchoredLabelAboveEntity(_playerHpLabel, new Vector2(0.25f, 0.5f), entitySize, 40f);
-        ApplyAnchoredLabelAboveEntity(_enemyHpLabel, new Vector2(0.75f, 0.5f), entitySize, 40f);
+        ApplyAnchoredInfoBoxAboveEntity(_playerInfoBox, new Vector2(0.25f, 0.45f), entitySize, 40f);
+        ApplyAnchoredInfoBoxAboveEntity(_enemyInfoBox, new Vector2(0.75f, 0.45f), entitySize, 40f);
     }
 
     private static void ApplyAnchoredRect(Control rect, Vector2 centerPercent, Vector2 size)
@@ -300,16 +320,16 @@ public partial class Main : Node
         rect.PivotOffset = size * 0.5f;
     }
 
-    private static void ApplyAnchoredLabelAboveEntity(Label label, Vector2 centerPercent, Vector2 entitySize, float verticalGap)
+    private static void ApplyAnchoredInfoBoxAboveEntity(Control box, Vector2 centerPercent, Vector2 entitySize, float verticalGap)
     {
-        Vector2 labelSize = label.Size;
-        label.AnchorLeft = centerPercent.X;
-        label.AnchorRight = centerPercent.X;
-        label.AnchorTop = centerPercent.Y;
-        label.AnchorBottom = centerPercent.Y;
-        label.OffsetLeft = -labelSize.X * 0.5f;
-        label.OffsetTop = -(entitySize.Y * 0.5f + verticalGap + labelSize.Y);
-        label.OffsetRight = labelSize.X * 0.5f;
-        label.OffsetBottom = -(entitySize.Y * 0.5f + verticalGap);
+        Vector2 boxSize = box.Size;
+        box.AnchorLeft = centerPercent.X;
+        box.AnchorRight = centerPercent.X;
+        box.AnchorTop = centerPercent.Y;
+        box.AnchorBottom = centerPercent.Y;
+        box.OffsetLeft = -boxSize.X * 0.5f;
+        box.OffsetTop = -(entitySize.Y * 0.5f + verticalGap + boxSize.Y);
+        box.OffsetRight = boxSize.X * 0.5f;
+        box.OffsetBottom = -(entitySize.Y * 0.5f + verticalGap);
     }
 }
