@@ -65,11 +65,19 @@ public partial class CombatManager : Control
         _playerWeakStacks = 0;
         _playerVulnerableStacks = 0;
 
-        int enemyCount = _rng.Next(1, 4);
+        int enemyCount = RollEnemyCountByFloor(floorIndex);
+        float countScaling = enemyCount switch
+        {
+            1 => 1.30f,
+            2 => 1.00f,
+            _ => 0.78f
+        };
         for (int i = 0; i < enemyCount; i++)
         {
-            int hp = 24 + floorIndex * 6 + _rng.Next(0, 6);
-            int atk = 6 + floorIndex + _rng.Next(0, 3);
+            int hp = Mathf.RoundToInt((24 + floorIndex * 5) * countScaling) + _rng.Next(0, 3);
+            int atk = Mathf.RoundToInt((6 + floorIndex * 1.2f) * (0.95f + countScaling * 0.08f)) + _rng.Next(0, 2);
+            hp = Mathf.Max(10, hp);
+            atk = Mathf.Max(3, atk);
             ActiveEnemies.Add(new EnemyData($"enemy_{floorIndex}_{i}", "Slime", hp, atk));
             _enemyBlocks.Add(0);
             _enemyWeakStacks.Add(0);
@@ -112,6 +120,11 @@ public partial class CombatManager : Control
     public void HideCombat()
     {
         Visible = false;
+    }
+
+    public void SyncUiState()
+    {
+        UpdateCombatState();
     }
 
     private void StartPlayerTurn()
@@ -622,5 +635,32 @@ public partial class CombatManager : Control
             int j = _rng.Next(i + 1);
             (list[i], list[j]) = (list[j], list[i]);
         }
+    }
+
+    private int RollEnemyCountByFloor(int floorIndex)
+    {
+        int roll = _rng.Next(100);
+
+        if (floorIndex <= 0)
+        {
+            return roll < 65 ? 1 : 2;
+        }
+
+        if (floorIndex <= 2)
+        {
+            if (roll < 25)
+            {
+                return 1;
+            }
+
+            return roll < 80 ? 2 : 3;
+        }
+
+        if (floorIndex <= 5)
+        {
+            return roll < 35 ? 2 : 3;
+        }
+
+        return roll < 20 ? 2 : 3;
     }
 }

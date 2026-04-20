@@ -113,6 +113,7 @@ public partial class Main : Node
         _combatManager.StartCombat(_gameManager.Deck, depth);
         BuildEnemyVisuals(_combatManager.ActiveEnemies);
         _combatManager.SetEnemyTargetNodes(new List<Control>(_enemyRects));
+        _combatManager.SyncUiState();
     }
 
     private void OnCombatWon()
@@ -366,20 +367,34 @@ public partial class Main : Node
         float areaStart = viewport.X * 0.55f;
         float areaEnd = viewport.X * 0.95f;
         float areaWidth = areaEnd - areaStart;
-        float spacing = enemies.Count <= 1 ? 0f : areaWidth / (enemies.Count - 1);
+        float desiredWidth = 180f;
+        float minimumGap = enemies.Count >= 3 ? 18f : 28f;
+        float enemyWidth = desiredWidth;
+        float enemyHeight = 260f;
+        if (enemies.Count > 1)
+        {
+            float maxWidthByArea = (areaWidth - minimumGap * (enemies.Count - 1)) / enemies.Count;
+            enemyWidth = Mathf.Clamp(maxWidthByArea, 135f, desiredWidth);
+            enemyHeight = enemyWidth / desiredWidth * 260f;
+        }
+
+        float spacing = enemies.Count <= 1 ? 0f : enemyWidth + minimumGap;
 
         for (int i = 0; i < enemies.Count; i++)
         {
-            float centerX = enemies.Count == 1 ? areaStart + areaWidth * 0.5f : areaStart + i * spacing;
-            centerX = Mathf.Clamp(centerX, areaStart + 90f, areaEnd - 90f);
+            float formationWidth = enemyWidth * enemies.Count + minimumGap * Mathf.Max(0, enemies.Count - 1);
+            float firstCenterX = areaStart + (areaWidth - formationWidth) * 0.5f + enemyWidth * 0.5f;
+            float centerX = enemies.Count == 1 ? areaStart + areaWidth * 0.5f : firstCenterX + i * spacing;
+            float halfWidth = enemyWidth * 0.5f;
+            centerX = Mathf.Clamp(centerX, areaStart + halfWidth, areaEnd - halfWidth);
             float centerY = viewport.Y * 0.55f;
 
             var rect = new ColorRect
             {
-                Size = new Vector2(180, 260),
-                CustomMinimumSize = new Vector2(180, 260),
+                Size = new Vector2(enemyWidth, enemyHeight),
+                CustomMinimumSize = new Vector2(enemyWidth, enemyHeight),
                 Color = new Color(0.65f, 0.50f, 0.50f),
-                Position = new Vector2(centerX - 90f, centerY - 130f),
+                Position = new Vector2(centerX - halfWidth, centerY - enemyHeight * 0.5f),
                 MouseFilter = Control.MouseFilterEnum.Ignore
             };
             _entityLayer.AddChild(rect);
@@ -397,7 +412,7 @@ public partial class Main : Node
 
             var intentLabel = new Label
             {
-                Text = "Intent: Attack 0",
+                Text = "Intent: ...",
                 HorizontalAlignment = HorizontalAlignment.Center,
                 MouseFilter = Control.MouseFilterEnum.Ignore,
                 ClipText = false,
