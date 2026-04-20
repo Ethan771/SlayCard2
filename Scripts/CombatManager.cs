@@ -4,14 +4,14 @@ using Godot;
 
 namespace SlayCard;
 
-// 战斗管理器：支持多敌人、护盾系统、目标判定与战斗状态。
+// 战斗管理器：支持多敌人、护盾系统、目标判定、状态与多段伤害。
 public partial class CombatManager : Control
 {
     [Signal] public delegate void CombatWonEventHandler();
     [Signal] public delegate void CombatLostEventHandler();
-    [Signal] public delegate void CombatStateChangedEventHandler(int energy, int drawPile, int discardPile, int playerBlock);
-    [Signal] public delegate void EnemiesStateChangedEventHandler(Godot.Collections.Array<int> enemyHealths, Godot.Collections.Array<int> enemyBlocks);
-    [Signal] public delegate void EnemyIntentChangedEventHandler(string intentText);
+    [Signal] public delegate void CombatStateChangedEventHandler(int energy, int drawPile, int discardPile, int playerBlock, int playerWeak, int playerVulnerable);
+    [Signal] public delegate void EnemiesStateChangedEventHandler(Godot.Collections.Array<int> enemyHealths, Godot.Collections.Array<int> enemyBlocks, Godot.Collections.Array<int> enemyWeaks, Godot.Collections.Array<int> enemyVulnerables);
+    [Signal] public delegate void EnemyIntentChangedEventHandler(Godot.Collections.Array<string> intentTexts);
     [Signal] public delegate void TurnStateChangedEventHandler(bool isPlayerTurn);
     [Signal] public delegate void EnemyDamagedEventHandler(Vector2 worldPosition, int value);
     [Signal] public delegate void PlayerDamagedEventHandler(Vector2 worldPosition, int value);
@@ -26,6 +26,9 @@ public partial class CombatManager : Control
     private readonly List<CardUI> _handUis = new();
     private readonly List<Control> _enemyTargetNodes = new();
     private readonly List<int> _enemyBlocks = new();
+    private readonly List<int> _enemyWeakStacks = new();
+    private readonly List<int> _enemyVulnerableStacks = new();
+    private readonly List<EnemyIntent> _enemyIntents = new();
 
     private Control _handRoot = null!;
 
@@ -34,11 +37,13 @@ public partial class CombatManager : Control
     private GameManager _gameManager = null!;
     private int _energy;
     private int _playerBlock;
+    private int _playerWeakStacks;
+    private int _playerVulnerableStacks;
     private bool _isPlayerTurn;
 
     public override void _Ready()
     {
-        Size = GetViewportRect().Size;
+        Size = GetViewport().GetVisibleRect().Size;
         CustomMinimumSize = Size;
         MouseFilter = MouseFilterEnum.Pass;
         Visible = false;
@@ -51,6 +56,14 @@ public partial class CombatManager : Control
 
         ActiveEnemies.Clear();
         _enemyBlocks.Clear();
+        _enemyWeakStacks.Clear();
+        _enemyVulnerableStacks.Clear();
+        _enemyIntents.Clear();
+        _enemyTargetNodes.Clear();
+
+        _playerBlock = 0;
+        _playerWeakStacks = 0;
+        _playerVulnerableStacks = 0;
 
         int enemyCount = _rng.Next(1, 4);
         for (int i = 0; i < enemyCount; i++)
@@ -59,6 +72,9 @@ public partial class CombatManager : Control
             int atk = 6 + floorIndex + _rng.Next(0, 3);
             ActiveEnemies.Add(new EnemyData($"enemy_{floorIndex}_{i}", "Slime", hp, atk));
             _enemyBlocks.Add(0);
+            _enemyWeakStacks.Add(0);
+            _enemyVulnerableStacks.Add(0);
+            _enemyIntents.Add(default);
         }
 
         _drawPile.Clear();
@@ -103,11 +119,13 @@ public partial class CombatManager : Control
         _isPlayerTurn = true;
         _energy = 3;
         _playerBlock = 0;
+
         for (int i = 0; i < _enemyBlocks.Count; i++)
         {
             _enemyBlocks[i] = 0;
         }
 
+        GenerateEnemyIntents();
         DrawCards(5);
         RebuildHandUi();
         SetHandInteractable(true);
@@ -133,6 +151,9 @@ public partial class CombatManager : Control
 
         _hand.Clear();
         RebuildHandUi();
+
+        // 玩家回合结束，玩家状态衰减。
+        DecayPlayerStatuses();
         ExecuteEnemyTurn();
     }
 
@@ -165,37 +186,75 @@ public partial class CombatManager : Control
             return;
         }
 
+        bool needsEnemyTarget = card.NeedsEnemyTarget();
+        if (needsEnemyTarget && (targetIndex < 0 || targetIndex >= ActiveEnemies.Count))
+        {
+            return;
+        }
+
         _energy -= card.Cost;
 
-        if (card.Type == CardType.Attack)
-        {
-            if (targetIndex < 0 || targetIndex >= ActiveEnemies.Count)
-            {
-                _energy += card.Cost;
-                return;
-            }
+        _hand.Remove(card);
+        _discardPile.Add(card);
 
-            int damageAfterBlock = Mathf.Max(0, card.Damage - _enemyBlocks[targetIndex]);
-            _enemyBlocks[targetIndex] = Mathf.Max(0, _enemyBlocks[targetIndex] - card.Damage);
-            ActiveEnemies[targetIndex].CurrentHealth -= damageAfterBlock;
-
-            Vector2 hitPos = _enemyTargetNodes.Count > targetIndex
-                ? _enemyTargetNodes[targetIndex].GlobalPosition
-                : new Vector2(GetViewportRect().Size.X * 0.75f, GetViewportRect().Size.Y * 0.55f);
-            EmitSignal(SignalName.EnemyDamaged, hitPos, damageAfterBlock);
-        }
-        else
+        if (card.Block > 0)
         {
             _playerBlock += card.Block;
         }
 
-        _hand.Remove(card);
-        _discardPile.Add(card);
+        if (card.EnergyAmount > 0)
+        {
+            _energy += card.EnergyAmount;
+        }
+
+        if (card.Damage > 0 && targetIndex >= 0 && targetIndex < ActiveEnemies.Count)
+        {
+            int hitCount = Mathf.Max(1, card.HitCount);
+            for (int hit = 0; hit < hitCount && targetIndex < ActiveEnemies.Count; hit++)
+            {
+                ApplyPlayerAttackHit(targetIndex, card.Damage);
+                CleanupDeadEnemies();
+                if (ActiveEnemies.Count == 0)
+                {
+                    break;
+                }
+            }
+        }
+
+        if (card.ApplyWeak > 0)
+        {
+            if (needsEnemyTarget && targetIndex >= 0 && targetIndex < ActiveEnemies.Count)
+            {
+                _enemyWeakStacks[targetIndex] += card.ApplyWeak;
+            }
+            else
+            {
+                _playerWeakStacks += card.ApplyWeak;
+            }
+        }
+
+        if (card.ApplyVulnerable > 0)
+        {
+            if (needsEnemyTarget && targetIndex >= 0 && targetIndex < ActiveEnemies.Count)
+            {
+                _enemyVulnerableStacks[targetIndex] += card.ApplyVulnerable;
+            }
+            else
+            {
+                _playerVulnerableStacks += card.ApplyVulnerable;
+            }
+        }
+
+        if (card.DrawAmount > 0)
+        {
+            DrawCards(card.DrawAmount);
+        }
 
         CleanupDeadEnemies();
 
         if (ActiveEnemies.Count == 0)
         {
+            RebuildHandUi();
             UpdateCombatState();
             EmitSignal(SignalName.CombatWon);
             return;
@@ -203,6 +262,72 @@ public partial class CombatManager : Control
 
         RebuildHandUi();
         UpdateCombatState();
+    }
+
+    private void ApplyPlayerAttackHit(int targetIndex, int baseDamage)
+    {
+        if (targetIndex < 0 || targetIndex >= ActiveEnemies.Count)
+        {
+            return;
+        }
+
+        int modifiedDamage = baseDamage;
+        if (_playerWeakStacks > 0)
+        {
+            modifiedDamage -= 3;
+        }
+        if (_enemyVulnerableStacks[targetIndex] > 0)
+        {
+            modifiedDamage += 3;
+        }
+
+        modifiedDamage = Mathf.Max(0, modifiedDamage);
+
+        int blocked = Mathf.Min(_enemyBlocks[targetIndex], modifiedDamage);
+        _enemyBlocks[targetIndex] -= blocked;
+        int damageToHealth = modifiedDamage - blocked;
+
+        if (damageToHealth > 0)
+        {
+            ActiveEnemies[targetIndex].CurrentHealth -= damageToHealth;
+        }
+
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
+        Vector2 hitPos = _enemyTargetNodes.Count > targetIndex
+            ? _enemyTargetNodes[targetIndex].GlobalPosition
+            : new Vector2(viewport.X * 0.75f, viewport.Y * 0.55f);
+        EmitSignal(SignalName.EnemyDamaged, hitPos, damageToHealth);
+    }
+
+    private void ApplyEnemyAttackHit(int enemyIndex, int baseDamage)
+    {
+        if (enemyIndex < 0 || enemyIndex >= ActiveEnemies.Count)
+        {
+            return;
+        }
+
+        int modifiedDamage = baseDamage;
+        if (_enemyWeakStacks[enemyIndex] > 0)
+        {
+            modifiedDamage -= 3;
+        }
+        if (_playerVulnerableStacks > 0)
+        {
+            modifiedDamage += 3;
+        }
+
+        modifiedDamage = Mathf.Max(0, modifiedDamage);
+
+        int blocked = Mathf.Min(_playerBlock, modifiedDamage);
+        _playerBlock -= blocked;
+        int damageToHealth = modifiedDamage - blocked;
+
+        if (damageToHealth > 0)
+        {
+            _gameManager.LoseHealth(damageToHealth);
+        }
+
+        EmitSignal(SignalName.PlayerDamaged, new Vector2(120, 80), damageToHealth);
     }
 
     private void CleanupDeadEnemies()
@@ -216,6 +341,10 @@ public partial class CombatManager : Control
 
             ActiveEnemies.RemoveAt(i);
             _enemyBlocks.RemoveAt(i);
+            _enemyWeakStacks.RemoveAt(i);
+            _enemyVulnerableStacks.RemoveAt(i);
+            _enemyIntents.RemoveAt(i);
+
             if (_enemyTargetNodes.Count > i)
             {
                 _enemyTargetNodes.RemoveAt(i);
@@ -229,30 +358,125 @@ public partial class CombatManager : Control
     {
         await ToSignal(GetTree().CreateTimer(0.45f), SceneTreeTimer.SignalName.Timeout);
 
-        int totalIncoming = 0;
-        foreach (EnemyData enemy in ActiveEnemies)
+        for (int i = 0; i < ActiveEnemies.Count; i++)
         {
-            totalIncoming += enemy.BaseAttack + _rng.Next(0, 3);
+            EnemyIntent intent = _enemyIntents[i];
+            if (intent.Type == EnemyIntentType.Defend)
+            {
+                _enemyBlocks[i] += intent.Block;
+                continue;
+            }
+
+            int hitCount = Mathf.Max(1, intent.HitCount);
+            for (int hit = 0; hit < hitCount; hit++)
+            {
+                ApplyEnemyAttackHit(i, intent.Damage);
+                if (_gameManager.PlayerHealth <= 0)
+                {
+                    UpdateCombatState();
+                    EmitSignal(SignalName.CombatLost);
+                    return;
+                }
+            }
         }
 
-        int finalDamage = Mathf.Max(0, totalIncoming - _playerBlock);
-        _playerBlock = Mathf.Max(0, _playerBlock - totalIncoming);
-
-        if (finalDamage > 0)
-        {
-            _gameManager.LoseHealth(finalDamage);
-        }
-
-        EmitSignal(SignalName.PlayerDamaged, new Vector2(120, 80), finalDamage);
+        DecayEnemyStatuses();
         UpdateCombatState();
+        StartPlayerTurn();
+    }
 
-        if (_gameManager.PlayerHealth <= 0)
+    private void DecayPlayerStatuses()
+    {
+        if (_playerWeakStacks > 0)
         {
-            EmitSignal(SignalName.CombatLost);
-            return;
+            _playerWeakStacks -= 1;
         }
 
-        StartPlayerTurn();
+        if (_playerVulnerableStacks > 0)
+        {
+            _playerVulnerableStacks -= 1;
+        }
+    }
+
+    private void DecayEnemyStatuses()
+    {
+        for (int i = 0; i < ActiveEnemies.Count; i++)
+        {
+            if (_enemyWeakStacks[i] > 0)
+            {
+                _enemyWeakStacks[i] -= 1;
+            }
+
+            if (_enemyVulnerableStacks[i] > 0)
+            {
+                _enemyVulnerableStacks[i] -= 1;
+            }
+        }
+    }
+
+    private void GenerateEnemyIntents()
+    {
+        for (int i = 0; i < ActiveEnemies.Count; i++)
+        {
+            int roll = _rng.Next(100);
+            EnemyData enemy = ActiveEnemies[i];
+
+            if (roll < 40)
+            {
+                _enemyIntents[i] = new EnemyIntent
+                {
+                    Type = EnemyIntentType.Attack,
+                    Damage = enemy.BaseAttack + _rng.Next(0, 3),
+                    HitCount = 1,
+                    Block = 0
+                };
+            }
+            else if (roll < 70)
+            {
+                _enemyIntents[i] = new EnemyIntent
+                {
+                    Type = EnemyIntentType.Attack,
+                    Damage = Mathf.Max(1, enemy.BaseAttack - 2 + _rng.Next(0, 2)),
+                    HitCount = _rng.Next(2, 4),
+                    Block = 0
+                };
+            }
+            else
+            {
+                _enemyIntents[i] = new EnemyIntent
+                {
+                    Type = EnemyIntentType.Defend,
+                    Damage = 0,
+                    HitCount = 1,
+                    Block = 5 + _rng.Next(0, 3)
+                };
+            }
+        }
+
+        EmitEnemyIntents();
+    }
+
+    private void EmitEnemyIntents()
+    {
+        var intents = new Godot.Collections.Array<string>();
+        for (int i = 0; i < ActiveEnemies.Count; i++)
+        {
+            EnemyIntent intent = _enemyIntents[i];
+            if (intent.Type == EnemyIntentType.Defend)
+            {
+                intents.Add($"Intent: Defend {intent.Block}");
+            }
+            else if (intent.HitCount > 1)
+            {
+                intents.Add($"Intent: Attack {intent.Damage} x {intent.HitCount}");
+            }
+            else
+            {
+                intents.Add($"Intent: Attack {intent.Damage}");
+            }
+        }
+
+        EmitSignal(SignalName.EnemyIntentChanged, intents);
     }
 
     private void RebuildHandUi()
@@ -316,11 +540,12 @@ public partial class CombatManager : Control
 
     private void BuildCombatUi()
     {
+        Vector2 viewportSize = GetViewport().GetVisibleRect().Size;
         var background = new ColorRect
         {
             Color = new Color(0.1f, 0.1f, 0.16f, 1f),
-            Size = new Vector2(1280, 720),
-            CustomMinimumSize = new Vector2(1280, 720),
+            Size = viewportSize,
+            CustomMinimumSize = viewportSize,
             MouseFilter = MouseFilterEnum.Ignore
         };
         AddChild(background);
@@ -328,8 +553,8 @@ public partial class CombatManager : Control
         _handRoot = new Control
         {
             Position = Vector2.Zero,
-            Size = new Vector2(1280, 720),
-            CustomMinimumSize = new Vector2(1280, 720),
+            Size = viewportSize,
+            CustomMinimumSize = viewportSize,
             MouseFilter = MouseFilterEnum.Ignore
         };
         AddChild(_handRoot);
@@ -337,18 +562,22 @@ public partial class CombatManager : Control
 
     private void UpdateCombatState()
     {
-        EmitSignal(SignalName.EnemyIntentChanged, "Intent: Attack");
-
         var enemyHealths = new Godot.Collections.Array<int>();
         var enemyBlocks = new Godot.Collections.Array<int>();
+        var enemyWeaks = new Godot.Collections.Array<int>();
+        var enemyVulns = new Godot.Collections.Array<int>();
+
         for (int i = 0; i < ActiveEnemies.Count; i++)
         {
             enemyHealths.Add(Mathf.Max(0, ActiveEnemies[i].CurrentHealth));
             enemyBlocks.Add(_enemyBlocks[i]);
+            enemyWeaks.Add(_enemyWeakStacks[i]);
+            enemyVulns.Add(_enemyVulnerableStacks[i]);
         }
 
-        EmitSignal(SignalName.EnemiesStateChanged, enemyHealths, enemyBlocks);
-        EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count, _playerBlock);
+        EmitEnemyIntents();
+        EmitSignal(SignalName.EnemiesStateChanged, enemyHealths, enemyBlocks, enemyWeaks, enemyVulns);
+        EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count, _playerBlock, _playerWeakStacks, _playerVulnerableStacks);
     }
 
     private void ApplyHandArcLayout()
@@ -359,7 +588,7 @@ public partial class CombatManager : Control
             return;
         }
 
-        Vector2 viewportSize = GetViewportRect().Size;
+        Vector2 viewportSize = GetViewport().GetVisibleRect().Size;
         float handArcRadius = viewportSize.Y + 280f;
         Vector2 handCenterPosition = new(viewportSize.X * 0.5f, viewportSize.Y + 800f);
 

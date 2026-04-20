@@ -2,6 +2,20 @@ using Godot;
 
 namespace SlayCard;
 
+public enum EnemyIntentType
+{
+    Attack,
+    Defend
+}
+
+public struct EnemyIntent
+{
+    public EnemyIntentType Type;
+    public int Damage;
+    public int Block;
+    public int HitCount;
+}
+
 // 敌人数据资源：支持纯代码动态构建战斗单位。
 public partial class EnemyData : Resource
 {

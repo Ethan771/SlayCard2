@@ -30,15 +30,20 @@ public partial class GameManager : Node
         PlayerHealth = MaxPlayerHealth;
         CurrentFloorIndex = 0;
 
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 4; i++)
         {
-            Deck.Add(new CardData("strike", "Strike", "Deal 6 damage.", 1, damage: 6));
+            Deck.Add(new CardData("strike", "Strike", "Deal 6 damage.", 1, damage: 6, cardType: CardType.Attack));
         }
 
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 4; i++)
         {
-            Deck.Add(new CardData("defend", "Defend", "Gain 5 block.", 1, block: 5));
+            Deck.Add(new CardData("defend", "Defend", "Gain 5 block.", 1, block: 5, cardType: CardType.Block));
         }
+
+        Deck.Add(new CardData("pummel", "Pummel", "Deal 2 damage 4 times.", 1, damage: 2, cardType: CardType.Attack, hitCount: 4));
+        Deck.Add(new CardData("bash", "Bash", "Deal 8 damage. Apply 2 Vulnerable.", 2, damage: 8, cardType: CardType.Attack, applyVulnerable: 2));
+        Deck.Add(new CardData("adrenaline", "Adrenaline", "Gain 1 energy. Draw 2 cards.", 0, cardType: CardType.Skill, drawAmount: 2, energyAmount: 1));
+        Deck.Add(new CardData("blind", "Blind", "Apply 2 Weak to a target.", 1, cardType: CardType.Skill, applyWeak: 2, requiresEnemyTarget: true));
 
         EmitSignal(SignalName.DeckChanged);
         EmitSignal(SignalName.GoldChanged, Gold);

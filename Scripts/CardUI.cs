@@ -34,7 +34,6 @@ public partial class CardUI : Control
 
     public override void _Ready()
     {
-        // 防雷：明确交互节点尺寸，避免 0x0 命中框。
         Size = CardSize;
         CustomMinimumSize = CardSize;
         MouseFilter = MouseFilterEnum.Stop;
@@ -80,14 +79,17 @@ public partial class CardUI : Control
 
                 float releaseY = GetGlobalMousePosition().Y;
                 int targetIndex = TargetResolver?.Invoke(GetGlobalMousePosition()) ?? -1;
+                bool needsEnemyTarget = CardData.NeedsEnemyTarget();
                 bool shouldPlay;
-                if (CardData.Type == CardType.Attack)
+
+                if (needsEnemyTarget)
                 {
                     shouldPlay = targetIndex >= 0;
                 }
                 else
                 {
-                    shouldPlay = releaseY < GetViewportRect().Size.Y * 0.5f;
+                    float playThresholdY = GetViewport().GetVisibleRect().Size.Y * 0.5f;
+                    shouldPlay = releaseY < playThresholdY;
                     targetIndex = -1;
                 }
 

@@ -22,12 +22,16 @@ public partial class Main : Node
     private Label _playerIntentLabel = null!;
     private Label _playerHpLabel = null!;
     private Label _playerBlockLabel = null!;
+    private Label _playerWeakLabel = null!;
+    private Label _playerVulnLabel = null!;
 
     private readonly List<Control> _enemyRects = new();
     private readonly List<VBoxContainer> _enemyInfoBoxes = new();
     private readonly List<Label> _enemyHpLabels = new();
     private readonly List<Label> _enemyIntentLabels = new();
     private readonly List<Label> _enemyBlockLabels = new();
+    private readonly List<Label> _enemyWeakLabels = new();
+    private readonly List<Label> _enemyVulnLabels = new();
 
     private int _currentEnergy;
 
@@ -208,11 +212,12 @@ public partial class Main : Node
 
     private void BuildEntityLayer(CanvasLayer canvasLayer)
     {
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
         _entityLayer = new Control
         {
             Position = Vector2.Zero,
-            Size = new Vector2(1280, 720),
-            CustomMinimumSize = new Vector2(1280, 720),
+            Size = viewport,
+            CustomMinimumSize = viewport,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Visible = false
         };
@@ -231,8 +236,8 @@ public partial class Main : Node
 
         _playerInfoBox = new VBoxContainer
         {
-            Size = new Vector2(220, 96),
-            CustomMinimumSize = new Vector2(220, 96),
+            Size = new Vector2(240, 126),
+            CustomMinimumSize = new Vector2(240, 126),
             Alignment = BoxContainer.AlignmentMode.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
@@ -254,6 +259,22 @@ public partial class Main : Node
             Visible = false
         };
         _playerInfoBox.AddChild(_playerBlockLabel);
+
+        _playerWeakLabel = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Visible = false
+        };
+        _playerInfoBox.AddChild(_playerWeakLabel);
+
+        _playerVulnLabel = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Visible = false
+        };
+        _playerInfoBox.AddChild(_playerVulnLabel);
 
         _playerHpLabel = new Label
         {
@@ -311,7 +332,7 @@ public partial class Main : Node
 
     private void UpdatePlayerLayout()
     {
-        Vector2 viewport = GetViewportRect().Size;
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
         Vector2 playerCenter = new(viewport.X * 0.25f, viewport.Y * 0.55f);
         Vector2 size = _playerRect.Size;
         _playerRect.Position = playerCenter - size * 0.5f;
@@ -338,17 +359,19 @@ public partial class Main : Node
         _enemyHpLabels.Clear();
         _enemyIntentLabels.Clear();
         _enemyBlockLabels.Clear();
+        _enemyWeakLabels.Clear();
+        _enemyVulnLabels.Clear();
 
-        Vector2 viewport = GetViewportRect().Size;
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
         float areaStart = viewport.X * 0.55f;
         float areaEnd = viewport.X * 0.95f;
         float areaWidth = areaEnd - areaStart;
-        float spacing = enemies.Count == 1 ? 0f : areaWidth / (enemies.Count - 1);
+        float spacing = enemies.Count <= 1 ? 0f : areaWidth / (enemies.Count - 1);
 
         for (int i = 0; i < enemies.Count; i++)
         {
             float centerX = enemies.Count == 1 ? areaStart + areaWidth * 0.5f : areaStart + i * spacing;
-            centerX = Mathf.Min(centerX, viewport.X - 90f);
+            centerX = Mathf.Clamp(centerX, areaStart + 90f, areaEnd - 90f);
             float centerY = viewport.Y * 0.55f;
 
             var rect = new ColorRect
@@ -364,9 +387,9 @@ public partial class Main : Node
 
             var infoBox = new VBoxContainer
             {
-                Position = new Vector2(centerX - 100f, rect.Position.Y - 104f),
-                Size = new Vector2(200, 92),
-                CustomMinimumSize = new Vector2(200, 92),
+                Position = new Vector2(centerX - 150f, rect.Position.Y - 120f),
+                Size = new Vector2(300, 110),
+                CustomMinimumSize = new Vector2(300, 110),
                 Alignment = BoxContainer.AlignmentMode.Center,
                 MouseFilter = Control.MouseFilterEnum.Ignore
             };
@@ -374,9 +397,12 @@ public partial class Main : Node
 
             var intentLabel = new Label
             {
-                Text = "Intent: ...",
+                Text = "Intent: Attack 0",
                 HorizontalAlignment = HorizontalAlignment.Center,
-                MouseFilter = Control.MouseFilterEnum.Ignore
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+                ClipText = false,
+                SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+                CustomMinimumSize = new Vector2(280, 24)
             };
             infoBox.AddChild(intentLabel);
 
@@ -388,6 +414,22 @@ public partial class Main : Node
                 Visible = false
             };
             infoBox.AddChild(blockLabel);
+
+            var weakLabel = new Label
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+                Visible = false
+            };
+            infoBox.AddChild(weakLabel);
+
+            var vulnLabel = new Label
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+                Visible = false
+            };
+            infoBox.AddChild(vulnLabel);
 
             var hpLabel = new Label
             {
@@ -401,6 +443,8 @@ public partial class Main : Node
             _enemyInfoBoxes.Add(infoBox);
             _enemyIntentLabels.Add(intentLabel);
             _enemyBlockLabels.Add(blockLabel);
+            _enemyWeakLabels.Add(weakLabel);
+            _enemyVulnLabels.Add(vulnLabel);
             _enemyHpLabels.Add(hpLabel);
         }
     }
@@ -449,11 +493,12 @@ public partial class Main : Node
 
     private void BuildDeathOverlay()
     {
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
         _deathOverlay = new Control
         {
             Position = Vector2.Zero,
-            Size = new Vector2(1280, 720),
-            CustomMinimumSize = new Vector2(1280, 720),
+            Size = viewport,
+            CustomMinimumSize = viewport,
             Visible = false,
             MouseFilter = Control.MouseFilterEnum.Stop
         };
@@ -462,8 +507,8 @@ public partial class Main : Node
         var mask = new ColorRect
         {
             Color = new Color(0f, 0f, 0f, 0.75f),
-            Size = new Vector2(1280, 720),
-            CustomMinimumSize = new Vector2(1280, 720),
+            Size = viewport,
+            CustomMinimumSize = viewport,
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         _deathOverlay.AddChild(mask);
@@ -471,7 +516,7 @@ public partial class Main : Node
         var title = new Label
         {
             Text = "YOU DIED",
-            Position = new Vector2(440, 250),
+            Position = new Vector2(viewport.X * 0.5f - 200f, viewport.Y * 0.35f),
             Size = new Vector2(400, 80),
             CustomMinimumSize = new Vector2(400, 80),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -484,7 +529,7 @@ public partial class Main : Node
         var restart = new Button
         {
             Text = "Restart Run",
-            Position = new Vector2(540, 360),
+            Position = new Vector2(viewport.X * 0.5f - 100f, viewport.Y * 0.5f),
             Size = new Vector2(200, 44),
             CustomMinimumSize = new Vector2(200, 44),
             MouseFilter = Control.MouseFilterEnum.Stop
@@ -508,6 +553,8 @@ public partial class Main : Node
         _enemyHpLabels.RemoveAt(enemyIndex);
         _enemyIntentLabels.RemoveAt(enemyIndex);
         _enemyBlockLabels.RemoveAt(enemyIndex);
+        _enemyWeakLabels.RemoveAt(enemyIndex);
+        _enemyVulnLabels.RemoveAt(enemyIndex);
     }
 
     private void ShowEntityVisuals(bool show)
@@ -515,9 +562,10 @@ public partial class Main : Node
         _entityLayer.Visible = show;
     }
 
-    private void OnCombatStateChanged(int energy, int drawPile, int discardPile, int playerBlock)
+    private void OnCombatStateChanged(int energy, int drawPile, int discardPile, int playerBlock, int playerWeak, int playerVulnerable)
     {
         _currentEnergy = energy;
+
         if (playerBlock > 0)
         {
             _playerBlockLabel.Text = $"Block: {playerBlock}";
@@ -528,34 +576,42 @@ public partial class Main : Node
             _playerBlockLabel.Visible = false;
         }
 
+        _playerWeakLabel.Text = $"[Weak: {playerWeak}]";
+        _playerWeakLabel.Visible = playerWeak > 0;
+
+        _playerVulnLabel.Text = $"[Vuln: {playerVulnerable}]";
+        _playerVulnLabel.Visible = playerVulnerable > 0;
+
         RefreshHud();
     }
 
-    private void OnEnemiesStateChanged(Godot.Collections.Array<int> enemyHealths, Godot.Collections.Array<int> enemyBlocks)
+    private void OnEnemiesStateChanged(Godot.Collections.Array<int> enemyHealths, Godot.Collections.Array<int> enemyBlocks, Godot.Collections.Array<int> enemyWeaks, Godot.Collections.Array<int> enemyVulns)
     {
         int count = Mathf.Min(enemyHealths.Count, _enemyHpLabels.Count);
         for (int i = 0; i < count; i++)
         {
             _enemyHpLabels[i].Text = $"HP: {enemyHealths[i]}";
 
-            int blockValue = i < enemyBlocks.Count ? (int)enemyBlocks[i] : 0;
-            if (blockValue > 0)
-            {
-                _enemyBlockLabels[i].Text = $"Block: {blockValue}";
-                _enemyBlockLabels[i].Visible = true;
-            }
-            else
-            {
-                _enemyBlockLabels[i].Visible = false;
-            }
+            int blockValue = i < enemyBlocks.Count ? enemyBlocks[i] : 0;
+            _enemyBlockLabels[i].Text = $"Block: {blockValue}";
+            _enemyBlockLabels[i].Visible = blockValue > 0;
+
+            int weakValue = i < enemyWeaks.Count ? enemyWeaks[i] : 0;
+            _enemyWeakLabels[i].Text = $"[Weak: {weakValue}]";
+            _enemyWeakLabels[i].Visible = weakValue > 0;
+
+            int vulnValue = i < enemyVulns.Count ? enemyVulns[i] : 0;
+            _enemyVulnLabels[i].Text = $"[Vuln: {vulnValue}]";
+            _enemyVulnLabels[i].Visible = vulnValue > 0;
         }
     }
 
-    private void OnEnemyIntentChanged(string intentText)
+    private void OnEnemyIntentChanged(Godot.Collections.Array<string> intentTexts)
     {
-        foreach (Label intentLabel in _enemyIntentLabels)
+        int count = Mathf.Min(intentTexts.Count, _enemyIntentLabels.Count);
+        for (int i = 0; i < count; i++)
         {
-            intentLabel.Text = intentText;
+            _enemyIntentLabels[i].Text = intentTexts[i];
         }
     }
 

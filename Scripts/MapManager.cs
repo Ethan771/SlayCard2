@@ -20,8 +20,9 @@ public partial class MapManager : Control
 
     public override void _Ready()
     {
-        Size = new Vector2(1280, 720);
-        CustomMinimumSize = new Vector2(1280, 720);
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
+        Size = viewport;
+        CustomMinimumSize = viewport;
         MouseFilter = MouseFilterEnum.Pass;
         Visible = false;
 
@@ -57,11 +58,13 @@ public partial class MapManager : Control
 
     private void BuildMapUi()
     {
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
+
         var bg = new ColorRect
         {
             Color = new Color(0.08f, 0.08f, 0.12f),
-            Size = new Vector2(1280, 720),
-            CustomMinimumSize = new Vector2(1280, 720),
+            Size = viewport,
+            CustomMinimumSize = viewport,
             MouseFilter = MouseFilterEnum.Ignore
         };
         AddChild(bg);
@@ -69,7 +72,7 @@ public partial class MapManager : Control
         var title = new Label
         {
             Text = "Choose your route",
-            Position = new Vector2(30, 20),
+            Position = new Vector2(30, viewport.Y * 0.10f),
             Size = new Vector2(280, 40),
             CustomMinimumSize = new Vector2(280, 40),
             MouseFilter = MouseFilterEnum.Ignore
@@ -90,7 +93,7 @@ public partial class MapManager : Control
                 };
 
                 float x = 220 + depth * 190;
-                float yBase = 360;
+                float yBase = viewport.Y * 0.5f;
                 float y = yBase + (lane - (laneCount - 1) / 2.0f) * 120;
                 button.Position = new Vector2(x, y);
                 button.Modulate = new Color(0.9f, 0.9f, 0.9f);

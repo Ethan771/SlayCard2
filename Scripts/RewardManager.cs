@@ -85,7 +85,7 @@ public partial class RewardManager : Control
 
     private void CenterCardsBox()
     {
-        Vector2 viewport = GetViewportRect().Size;
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
         _cardsBox.Position = new Vector2(viewport.X * 0.5f - _cardsBox.Size.X * 0.5f, viewport.Y * 0.5f - _cardsBox.Size.Y * 0.5f);
     }
 
