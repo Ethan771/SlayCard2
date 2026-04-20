@@ -16,6 +16,7 @@ public partial class Main : Node
     private MapManager _mapManager = null!;
     private RewardManager _rewardManager = null!;
     private VfxManager _vfxManager = null!;
+    private CanvasLayer _overlayCanvasLayer = null!;
 
     private Control _topUiContainer = null!;
     private Label _hudLabel = null!;
@@ -192,14 +193,12 @@ public partial class Main : Node
     private void OnRewardPicked(CardData pickedCard)
     {
         _gameManager.AddCardToDeck(pickedCard);
-        _mapManager.ShowMap();
-        CallDeferred(nameof(TryAutoAdvanceOutsideCombat));
+        ShowPostCombatPotionChoice();
     }
 
     private void OnRewardSkipped()
     {
-        _mapManager.ShowMap();
-        CallDeferred(nameof(TryAutoAdvanceOutsideCombat));
+        ShowPostCombatPotionChoice();
     }
 
     private void OnPlayerDied()
@@ -238,6 +237,11 @@ public partial class Main : Node
     {
         var canvasLayer = new CanvasLayer();
         AddChild(canvasLayer);
+        _overlayCanvasLayer = new CanvasLayer
+        {
+            Layer = 5
+        };
+        AddChild(_overlayCanvasLayer);
 
         _topUiContainer = new Control
         {
@@ -606,7 +610,7 @@ public partial class Main : Node
             Visible = false,
             MouseFilter = Control.MouseFilterEnum.Stop
         };
-        AddChild(_deathOverlay);
+        _overlayCanvasLayer.AddChild(_deathOverlay);
 
         var mask = new ColorRect
         {
@@ -862,7 +866,7 @@ public partial class Main : Node
             ZIndex = 9000,
             ZAsRelative = false
         };
-        AddChild(_deckOverlay);
+        _overlayCanvasLayer.AddChild(_deckOverlay);
 
         _deckOverlay.AddChild(new ColorRect
         {
@@ -962,7 +966,7 @@ public partial class Main : Node
             Visible = false,
             MouseFilter = Control.MouseFilterEnum.Stop
         };
-        AddChild(_roomOverlay);
+        _overlayCanvasLayer.AddChild(_roomOverlay);
 
         _roomOverlay.AddChild(new ColorRect
         {
@@ -1153,6 +1157,42 @@ public partial class Main : Node
         _gameManager.AdvanceFloor();
         _mapManager.ShowMap();
         TryAutoAdvanceOutsideCombat();
+    }
+
+    private void ShowPostCombatPotionChoice()
+    {
+        _roomOverlay.Visible = true;
+        foreach (Node child in _roomContent.GetChildren())
+        {
+            child.QueueFree();
+        }
+
+        _roomTitleLabel.Text = "Combat Bonus";
+        AddRoomText("You may take 1 random potion reward, or skip it.");
+
+        AddRoomButton("Take Potion", () =>
+        {
+            PotionData potion = _potionPool[(int)GD.RandRange(0, _potionPool.Count - 1)];
+            if (_gameManager.AddPotion(potion))
+            {
+                AddRoomText($"Obtained potion: {potion.Name}");
+            }
+            else
+            {
+                AddRoomText("Potion slots are full, reward skipped.");
+            }
+
+            CompleteCombatRewardFlow();
+        });
+
+        AddRoomButton("Skip Potion", CompleteCombatRewardFlow);
+    }
+
+    private void CompleteCombatRewardFlow()
+    {
+        _roomOverlay.Visible = false;
+        _mapManager.ShowMap();
+        CallDeferred(nameof(TryAutoAdvanceOutsideCombat));
     }
 
     private void AddRoomText(string text)
