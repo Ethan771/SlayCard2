@@ -50,6 +50,8 @@ public partial class Main : Node
     private int _lastPlayerWeak;
     private int _lastPlayerVuln;
     private int _activeCombatDepth = -1;
+    private int _combatEntryHealth;
+    private readonly List<PotionData?> _combatEntryPotions = new();
 
     private Control _deathOverlay = null!;
     private Control _deckOverlay = null!;
@@ -147,13 +149,14 @@ public partial class Main : Node
         MapNodeKind kind = _mapManager.GetNodeKind(depth, lane);
         if (kind == MapNodeKind.Question)
         {
-            kind = ResolveQuestionRoom();
+            kind = ResolveQuestionRoom(depth);
         }
 
         _mapManager.HideMap();
         if (kind == MapNodeKind.Combat || kind == MapNodeKind.Boss)
         {
             _activeCombatDepth = depth;
+            SnapshotCombatEntryState();
             _endTurnButton.Visible = true;
             _endTurnButton.Disabled = false;
             _replayCombatButton.Visible = true;
@@ -178,6 +181,7 @@ public partial class Main : Node
     private void OnCombatWon()
     {
         _combatManager.HideCombat();
+        _activeCombatDepth = -1;
         _endTurnButton.Visible = false;
         _replayCombatButton.Visible = false;
         ShowEntityVisuals(false);
@@ -193,6 +197,7 @@ public partial class Main : Node
     private void OnCombatLost()
     {
         _combatManager.HideCombat();
+        _activeCombatDepth = -1;
         _endTurnButton.Visible = false;
         _replayCombatButton.Visible = false;
         ShowEntityVisuals(false);
@@ -221,6 +226,7 @@ public partial class Main : Node
         _deathOverlay.Visible = false;
         _gameManager.ResetRun();
         _combatManager.HideCombat();
+        _activeCombatDepth = -1;
         ShowEntityVisuals(false);
         _endTurnButton.Visible = false;
         _replayCombatButton.Visible = false;
@@ -896,6 +902,7 @@ public partial class Main : Node
         }
 
         _combatManager.SetAutoPlaying(false);
+        _gameManager.RestoreCombatEntryState(_combatEntryHealth, _combatEntryPotions);
         _lastPlayerWeak = 0;
         _lastPlayerVuln = 0;
         _combatManager.StartCombat(_gameManager.Deck, _activeCombatDepth);
@@ -903,6 +910,16 @@ public partial class Main : Node
         _combatManager.SetEnemyTargetNodes(new List<Control>(_enemyRects));
         _combatManager.SyncUiState();
         RefreshHud();
+    }
+
+    private void SnapshotCombatEntryState()
+    {
+        _combatEntryHealth = _gameManager.PlayerHealth;
+        _combatEntryPotions.Clear();
+        foreach (PotionData? potion in _gameManager.Potions)
+        {
+            _combatEntryPotions.Add(potion);
+        }
     }
 
     private async void TryAutoAdvanceOutsideCombat()
@@ -1118,11 +1135,12 @@ public partial class Main : Node
         panel.AddChild(_roomContent);
     }
 
-    private MapNodeKind ResolveQuestionRoom()
+    private MapNodeKind ResolveQuestionRoom(int depth)
     {
         int roll = (int)GD.RandRange(0, 99);
         if (roll < 40) return MapNodeKind.Combat;
         if (roll < 60) return MapNodeKind.Chest;
+        if (depth < 3) return MapNodeKind.Question;
         if (roll < 80) return MapNodeKind.Shop;
         return MapNodeKind.Question;
     }
@@ -1143,10 +1161,26 @@ public partial class Main : Node
             case MapNodeKind.Shop:
                 ShowShopRoom();
                 break;
+            case MapNodeKind.Campfire:
+                ShowCampfireRoom();
+                break;
             default:
                 ShowSpecialEventRoom();
                 break;
         }
+    }
+
+    private void ShowCampfireRoom()
+    {
+        _roomTitleLabel.Text = "Campfire";
+        AddRoomText("Take a short rest and recover 20% of max HP.");
+        AddRoomButton("Rest", () =>
+        {
+            int healAmount = Mathf.Max(1, Mathf.RoundToInt(_gameManager.MaxPlayerHealth * 0.2f));
+            _gameManager.Heal(healAmount);
+            AddRoomText($"Recovered {healAmount} HP.");
+            CompleteNonCombatRoom();
+        });
     }
 
     private void ShowChestRoom()

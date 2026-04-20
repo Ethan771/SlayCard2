@@ -140,6 +140,25 @@ public partial class GameManager : Node
         return true;
     }
 
+    public void RestoreCombatEntryState(int playerHealth, IReadOnlyList<PotionData?> potions)
+    {
+        PlayerHealth = Mathf.Clamp(playerHealth, 0, MaxPlayerHealth);
+
+        int count = Mathf.Min(Potions.Count, potions.Count);
+        for (int i = 0; i < count; i++)
+        {
+            Potions[i] = potions[i];
+        }
+
+        for (int i = count; i < Potions.Count; i++)
+        {
+            Potions[i] = null;
+        }
+
+        EmitSignal(SignalName.PlayerHealthChanged, PlayerHealth);
+        EmitSignal(SignalName.PotionsChanged);
+    }
+
     public bool RemoveRandomCardFromDeck()
     {
         if (Deck.Count <= 1)
