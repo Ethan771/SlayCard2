@@ -15,6 +15,7 @@ public enum MapNodeKind
     Question,
     Chest,
     Shop,
+    Campfire,
     Boss
 }
 
@@ -24,9 +25,10 @@ public partial class MapManager : Control
     [Signal] public delegate void NodeSelectedEventHandler(int depth, int lane);
 
     private readonly Vector2 _nodeSize = new(120, 46);
-    private readonly int[] _lanesPerDepth = { 1, 2, 3, 2, 3, 2, 3, 2, 2, 1 };
+    private readonly int[] _lanesPerDepth = { 1, 2, 3, 2, 3, 2, 3, 2, 3, 2, 2, 1 };
     private readonly System.Collections.Generic.Dictionary<(int depth, int lane), Button> _nodeButtons = new();
     private readonly System.Collections.Generic.Dictionary<(int depth, int lane), MapNodeKind> _nodeKinds = new();
+    private readonly System.Collections.Generic.Dictionary<int, int> _selectedLaneByDepth = new();
     private readonly RandomNumberGenerator _rng = new();
 
     public override void _Ready()
@@ -65,6 +67,7 @@ public partial class MapManager : Control
                 Button button = _nodeButtons[(depth, lane)];
                 if (!button.Disabled)
                 {
+                    _selectedLaneByDepth[depth] = lane;
                     EmitSignal(SignalName.NodeSelected, depth, lane);
                     return true;
                 }
@@ -76,16 +79,29 @@ public partial class MapManager : Control
 
     public void UpdateNodeStates(int currentFloorIndex)
     {
+        if (currentFloorIndex <= 0)
+        {
+            _selectedLaneByDepth.Clear();
+        }
+
         for (int depth = 0; depth < _lanesPerDepth.Length; depth++)
         {
             int laneCount = _lanesPerDepth[depth];
             for (int lane = 0; lane < laneCount; lane++)
             {
-                MapNodeState state = depth < currentFloorIndex
-                    ? MapNodeState.Completed
-                    : depth == currentFloorIndex
-                        ? MapNodeState.Current
-                        : MapNodeState.Locked;
+                MapNodeState state;
+                if (depth < currentFloorIndex)
+                {
+                    state = MapNodeState.Completed;
+                }
+                else if (depth == currentFloorIndex && IsLaneReachable(depth, lane))
+                {
+                    state = MapNodeState.Current;
+                }
+                else
+                {
+                    state = MapNodeState.Locked;
+                }
                 ApplyNodeVisualState(depth, lane, state);
             }
         }
@@ -130,7 +146,7 @@ public partial class MapManager : Control
                 };
 
                 float yBottom = viewport.Y * 0.82f;
-                float spacingY = viewport.Y * 0.075f;
+                float spacingY = viewport.Y * 0.62f / Mathf.Max(1, _lanesPerDepth.Length - 1);
                 float y = yBottom - depth * spacingY;
                 float xCenter = viewport.X * 0.5f;
                 float xSpread = 170f;
@@ -144,6 +160,7 @@ public partial class MapManager : Control
                 {
                     if (!button.Disabled)
                     {
+                        _selectedLaneByDepth[depthCapture] = laneCapture;
                         AudioManager.Instance?.PlaySFX("res://Audio/click.ogg");
                         EmitSignal(SignalName.NodeSelected, depthCapture, laneCapture);
                     }
@@ -195,6 +212,12 @@ public partial class MapManager : Control
             return MapNodeKind.Boss;
         }
 
+        // 第6层节点（索引5）固定火堆，Boss前一层固定火堆。
+        if (depth == 5 || depth == _lanesPerDepth.Length - 2)
+        {
+            return MapNodeKind.Campfire;
+        }
+
         int roll = _rng.RandiRange(0, 99);
         if (roll < 50)
         {
@@ -209,7 +232,52 @@ public partial class MapManager : Control
             return MapNodeKind.Chest;
         }
 
+        if (depth < 3)
+        {
+            return MapNodeKind.Combat;
+        }
+
         return MapNodeKind.Shop;
+    }
+
+    private bool IsLaneReachable(int depth, int lane)
+    {
+        if (depth <= 0)
+        {
+            return true;
+        }
+
+        if (!_selectedLaneByDepth.TryGetValue(depth - 1, out int previousLane))
+        {
+            return true;
+        }
+
+        int previousCount = _lanesPerDepth[depth - 1];
+        int currentCount = _lanesPerDepth[depth];
+        if (currentCount <= 1)
+        {
+            return lane == 0;
+        }
+
+        float normalized = previousCount <= 1
+            ? 0.5f
+            : previousLane / (float)(previousCount - 1);
+        float projected = normalized * (currentCount - 1);
+        int left = Mathf.Clamp(Mathf.FloorToInt(projected), 0, currentCount - 1);
+        int right = Mathf.Clamp(Mathf.CeilToInt(projected), 0, currentCount - 1);
+        if (left == right)
+        {
+            if (right < currentCount - 1)
+            {
+                right += 1;
+            }
+            else if (left > 0)
+            {
+                left -= 1;
+            }
+        }
+
+        return lane == left || lane == right;
     }
 
     private string GetNodeBaseText(int depth, int lane)
@@ -222,6 +290,7 @@ public partial class MapManager : Control
             MapNodeKind.Question => $"? {depth + 1}-{lane + 1}",
             MapNodeKind.Chest => $"Chest {depth + 1}-{lane + 1}",
             MapNodeKind.Shop => $"Shop {depth + 1}-{lane + 1}",
+            MapNodeKind.Campfire => $"Rest {depth + 1}-{lane + 1}",
             _ => $"Node {depth + 1}-{lane + 1}"
         };
     }
