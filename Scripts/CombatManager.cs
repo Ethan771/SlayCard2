@@ -45,8 +45,10 @@ public partial class CombatManager : Control
     private bool _isPlayerTurn;
     private bool _isAutoPlaying;
     private bool _isAutoLoopRunning;
+    private int _autoPlaySessionId;
 
     public bool IsAutoPlaying => _isAutoPlaying;
+    public bool IsPlayerTurn => _isPlayerTurn;
 
     public override void _Ready()
     {
@@ -136,6 +138,8 @@ public partial class CombatManager : Control
 
     public void SetAutoPlaying(bool enabled)
     {
+        _autoPlaySessionId++;
+
         if (_isAutoPlaying == enabled)
         {
             if (enabled)
@@ -151,11 +155,27 @@ public partial class CombatManager : Control
         if (_isAutoPlaying)
         {
             TryStartAutoPlayLoop();
+            return;
         }
+
+        RecoverPlayerTurnInputState();
+    }
+
+    public void RecoverPlayerTurnInputState()
+    {
+        if (!_isPlayerTurn || !Visible)
+        {
+            return;
+        }
+
+        SetHandInteractable(true);
+        EmitSignal(SignalName.TurnStateChanged, true);
+        UpdateCombatState();
     }
 
     private void StartPlayerTurn()
     {
+        _autoPlaySessionId++;
         _isPlayerTurn = true;
         _energy = 3;
         _playerBlock = 0;
@@ -411,45 +431,56 @@ public partial class CombatManager : Control
 
     private async void ExecuteEnemyTurn()
     {
-        await ToSignal(GetTree().CreateTimer(0.45f), SceneTreeTimer.SignalName.Timeout);
-
-        for (int i = 0; i < ActiveEnemies.Count; i++)
+        try
         {
-            EnemyIntent intent = _enemyIntents[i];
-            if (intent.Type == EnemyIntentType.Defend)
-            {
-                _enemyBlocks[i] += intent.Block;
-                continue;
-            }
+            await ToSignal(GetTree().CreateTimer(0.45f), SceneTreeTimer.SignalName.Timeout);
 
-            if (intent.Type == EnemyIntentType.Debuff)
+            for (int i = 0; i < ActiveEnemies.Count; i++)
             {
-                EmitSignal(SignalName.EnemyAttackPerformed, i);
-                _playerVulnerableStacks += Mathf.Max(1, intent.ApplyVulnerable);
-                continue;
-            }
-
-            int hitCount = Mathf.Max(1, intent.HitCount);
-            for (int hit = 0; hit < hitCount; hit++)
-            {
-                ApplyEnemyAttackHit(i, intent.Damage);
-                if (_gameManager.PlayerHealth <= 0)
+                EnemyIntent intent = _enemyIntents[i];
+                if (intent.Type == EnemyIntentType.Defend)
                 {
-                    UpdateCombatState();
-                    EmitSignal(SignalName.CombatLost);
-                    return;
+                    _enemyBlocks[i] += intent.Block;
+                    continue;
+                }
+
+                if (intent.Type == EnemyIntentType.Debuff)
+                {
+                    EmitSignal(SignalName.EnemyAttackPerformed, i);
+                    _playerVulnerableStacks += Mathf.Max(1, intent.ApplyVulnerable);
+                    continue;
+                }
+
+                int hitCount = Mathf.Max(1, intent.HitCount);
+                for (int hit = 0; hit < hitCount; hit++)
+                {
+                    ApplyEnemyAttackHit(i, intent.Damage);
+                    if (_gameManager.PlayerHealth <= 0)
+                    {
+                        UpdateCombatState();
+                        EmitSignal(SignalName.CombatLost);
+                        return;
+                    }
+                }
+
+                if (intent.ApplyVulnerable > 0)
+                {
+                    _playerVulnerableStacks += intent.ApplyVulnerable;
                 }
             }
 
-            if (intent.ApplyVulnerable > 0)
+            DecayEnemyStatuses();
+            UpdateCombatState();
+            StartPlayerTurn();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"Enemy turn failed: {ex}");
+            if (_gameManager.PlayerHealth > 0)
             {
-                _playerVulnerableStacks += intent.ApplyVulnerable;
+                StartPlayerTurn();
             }
         }
-
-        DecayEnemyStatuses();
-        UpdateCombatState();
-        StartPlayerTurn();
     }
 
     private void DecayPlayerStatuses()
@@ -632,16 +663,22 @@ public partial class CombatManager : Control
 
     private async System.Threading.Tasks.Task RunAutoPlayLoop()
     {
+        int sessionAtStart = _autoPlaySessionId;
         _isAutoLoopRunning = true;
         try
         {
             while (_isAutoPlaying && _isPlayerTurn && Visible)
             {
+                if (sessionAtStart != _autoPlaySessionId)
+                {
+                    break;
+                }
+
                 AutoPlayDecision? decision = EvaluateBestCard();
                 if (decision is null)
                 {
                     await ToSignal(GetTree().CreateTimer(0.5f), SceneTreeTimer.SignalName.Timeout);
-                    if (_isAutoPlaying && _isPlayerTurn)
+                    if (_isAutoPlaying && _isPlayerTurn && sessionAtStart == _autoPlaySessionId)
                     {
                         EndPlayerTurn();
                     }
@@ -655,6 +692,12 @@ public partial class CombatManager : Control
 
                 Node flightTarget = decision.TargetNode ?? _handRoot;
                 await decision.CardUi.SimulatePlay(flightTarget);
+
+                if (!_isAutoPlaying || !_isPlayerTurn || sessionAtStart != _autoPlaySessionId)
+                {
+                    break;
+                }
+
                 await ToSignal(GetTree().CreateTimer(0.8f), SceneTreeTimer.SignalName.Timeout);
             }
         }

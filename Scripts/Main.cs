@@ -36,9 +36,13 @@ public partial class Main : Node
     private readonly List<Label> _enemyBlockLabels = new();
     private readonly List<Label> _enemyWeakLabels = new();
     private readonly List<Label> _enemyVulnLabels = new();
+    private readonly List<int> _lastEnemyWeakStacks = new();
+    private readonly List<int> _lastEnemyVulnStacks = new();
 
     private int _currentEnergy;
     private bool _isAutoUiFlowRunning;
+    private int _lastPlayerWeak;
+    private int _lastPlayerVuln;
 
     private Control _deathOverlay = null!;
 
@@ -119,6 +123,8 @@ public partial class Main : Node
         _endTurnButton.Visible = true;
         _endTurnButton.Disabled = false;
         ShowEntityVisuals(true);
+        _lastPlayerWeak = 0;
+        _lastPlayerVuln = 0;
 
         _combatManager.StartCombat(_gameManager.Deck, depth);
         BuildEnemyVisuals(_combatManager.ActiveEnemies);
@@ -151,13 +157,13 @@ public partial class Main : Node
     {
         _gameManager.AddCardToDeck(pickedCard);
         _mapManager.ShowMap();
-        TryAutoAdvanceOutsideCombat();
+        CallDeferred(nameof(TryAutoAdvanceOutsideCombat));
     }
 
     private void OnRewardSkipped()
     {
         _mapManager.ShowMap();
-        TryAutoAdvanceOutsideCombat();
+        CallDeferred(nameof(TryAutoAdvanceOutsideCombat));
     }
 
     private void OnPlayerDied()
@@ -176,6 +182,7 @@ public partial class Main : Node
         _endTurnButton.Visible = false;
         _mapManager.ShowMap();
         _mapManager.UpdateNodeStates(0);
+        TryAutoAdvanceOutsideCombat();
     }
 
     private void EnsureRewardManager()
@@ -393,6 +400,8 @@ public partial class Main : Node
         _enemyBlockLabels.Clear();
         _enemyWeakLabels.Clear();
         _enemyVulnLabels.Clear();
+        _lastEnemyWeakStacks.Clear();
+        _lastEnemyVulnStacks.Clear();
 
         Vector2 viewport = GetViewport().GetVisibleRect().Size;
         float areaStart = viewport.X * 0.55f;
@@ -492,6 +501,8 @@ public partial class Main : Node
             _enemyWeakLabels.Add(weakLabel);
             _enemyVulnLabels.Add(vulnLabel);
             _enemyHpLabels.Add(hpLabel);
+            _lastEnemyWeakStacks.Add(0);
+            _lastEnemyVulnStacks.Add(0);
         }
     }
 
@@ -601,6 +612,8 @@ public partial class Main : Node
         _enemyBlockLabels.RemoveAt(enemyIndex);
         _enemyWeakLabels.RemoveAt(enemyIndex);
         _enemyVulnLabels.RemoveAt(enemyIndex);
+        _lastEnemyWeakStacks.RemoveAt(enemyIndex);
+        _lastEnemyVulnStacks.RemoveAt(enemyIndex);
     }
 
     private void ShowEntityVisuals(bool show)
@@ -624,9 +637,19 @@ public partial class Main : Node
 
         _playerWeakLabel.Text = $"[Weak: {playerWeak}]";
         _playerWeakLabel.Visible = playerWeak > 0;
+        if (playerWeak > _lastPlayerWeak)
+        {
+            _vfxManager.PlayFloatingText(_playerRect.GlobalPosition + new Vector2(_playerRect.Size.X * 0.5f, -20f), $"+Weak {playerWeak - _lastPlayerWeak}", Colors.LightGoldenrodYellow);
+        }
+        _lastPlayerWeak = playerWeak;
 
         _playerVulnLabel.Text = $"[Vuln: {playerVulnerable}]";
         _playerVulnLabel.Visible = playerVulnerable > 0;
+        if (playerVulnerable > _lastPlayerVuln)
+        {
+            _vfxManager.PlayFloatingText(_playerRect.GlobalPosition + new Vector2(_playerRect.Size.X * 0.5f, -48f), $"+Vuln {playerVulnerable - _lastPlayerVuln}", Colors.IndianRed);
+        }
+        _lastPlayerVuln = playerVulnerable;
 
         RefreshHud();
     }
@@ -645,10 +668,26 @@ public partial class Main : Node
             int weakValue = i < enemyWeaks.Count ? enemyWeaks[i] : 0;
             _enemyWeakLabels[i].Text = $"[Weak: {weakValue}]";
             _enemyWeakLabels[i].Visible = weakValue > 0;
+            if (i < _lastEnemyWeakStacks.Count && weakValue > _lastEnemyWeakStacks[i])
+            {
+                _vfxManager.PlayFloatingText(_enemyRects[i].GlobalPosition + new Vector2(_enemyRects[i].Size.X * 0.5f, -18f), $"+Weak {weakValue - _lastEnemyWeakStacks[i]}", Colors.LightGoldenrodYellow);
+            }
+            if (i < _lastEnemyWeakStacks.Count)
+            {
+                _lastEnemyWeakStacks[i] = weakValue;
+            }
 
             int vulnValue = i < enemyVulns.Count ? enemyVulns[i] : 0;
             _enemyVulnLabels[i].Text = $"[Vuln: {vulnValue}]";
             _enemyVulnLabels[i].Visible = vulnValue > 0;
+            if (i < _lastEnemyVulnStacks.Count && vulnValue > _lastEnemyVulnStacks[i])
+            {
+                _vfxManager.PlayFloatingText(_enemyRects[i].GlobalPosition + new Vector2(_enemyRects[i].Size.X * 0.5f, -42f), $"+Vuln {vulnValue - _lastEnemyVulnStacks[i]}", Colors.IndianRed);
+            }
+            if (i < _lastEnemyVulnStacks.Count)
+            {
+                _lastEnemyVulnStacks[i] = vulnValue;
+            }
         }
     }
 
@@ -677,6 +716,11 @@ public partial class Main : Node
 
     private void OnAutoPlayStateChanged(bool isAutoPlaying)
     {
+        if (!isAutoPlaying)
+        {
+            _combatManager.RecoverPlayerTurnInputState();
+        }
+
         RefreshAutoPlayButton();
     }
 
