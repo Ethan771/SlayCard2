@@ -1,0 +1,228 @@
+using Godot;
+
+namespace SlayCard;
+
+public enum MapNodeState
+{
+    Locked,
+    Current,
+    Completed
+}
+
+public enum MapNodeKind
+{
+    Combat,
+    Question,
+    Chest,
+    Shop,
+    Boss
+}
+
+// 地图管理器：纯代码生成树状路线按钮。
+public partial class MapManager : Control
+{
+    [Signal] public delegate void NodeSelectedEventHandler(int depth, int lane);
+
+    private readonly Vector2 _nodeSize = new(120, 46);
+    private readonly int[] _lanesPerDepth = { 1, 2, 3, 2, 3, 2, 3, 2, 2, 1 };
+    private readonly System.Collections.Generic.Dictionary<(int depth, int lane), Button> _nodeButtons = new();
+    private readonly System.Collections.Generic.Dictionary<(int depth, int lane), MapNodeKind> _nodeKinds = new();
+    private readonly RandomNumberGenerator _rng = new();
+
+    public override void _Ready()
+    {
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
+        Size = viewport;
+        CustomMinimumSize = viewport;
+        MouseFilter = MouseFilterEnum.Pass;
+        Visible = false;
+
+        BuildMapUi();
+    }
+
+    public void ShowMap()
+    {
+        Visible = true;
+    }
+
+    public void HideMap()
+    {
+        Visible = false;
+    }
+
+    public bool TrySelectFirstAvailableNode()
+    {
+        if (!Visible)
+        {
+            return false;
+        }
+
+        for (int depth = 0; depth < _lanesPerDepth.Length; depth++)
+        {
+            int laneCount = _lanesPerDepth[depth];
+            for (int lane = 0; lane < laneCount; lane++)
+            {
+                Button button = _nodeButtons[(depth, lane)];
+                if (!button.Disabled)
+                {
+                    EmitSignal(SignalName.NodeSelected, depth, lane);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public void UpdateNodeStates(int currentFloorIndex)
+    {
+        for (int depth = 0; depth < _lanesPerDepth.Length; depth++)
+        {
+            int laneCount = _lanesPerDepth[depth];
+            for (int lane = 0; lane < laneCount; lane++)
+            {
+                MapNodeState state = depth < currentFloorIndex
+                    ? MapNodeState.Completed
+                    : depth == currentFloorIndex
+                        ? MapNodeState.Current
+                        : MapNodeState.Locked;
+                ApplyNodeVisualState(depth, lane, state);
+            }
+        }
+    }
+
+    private void BuildMapUi()
+    {
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
+
+        var bg = new ColorRect
+        {
+            Color = new Color(0.08f, 0.08f, 0.12f),
+            Size = viewport,
+            CustomMinimumSize = viewport,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        AddChild(bg);
+
+        var title = new Label
+        {
+            Text = "Choose your route",
+            Position = new Vector2(30, viewport.Y * 0.10f),
+            Size = new Vector2(280, 40),
+            CustomMinimumSize = new Vector2(280, 40),
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        AddChild(title);
+
+        for (int depth = 0; depth < _lanesPerDepth.Length; depth++)
+        {
+            int laneCount = _lanesPerDepth[depth];
+            for (int lane = 0; lane < laneCount; lane++)
+            {
+                MapNodeKind kind = RollNodeKind(depth);
+                _nodeKinds[(depth, lane)] = kind;
+                var button = new Button
+                {
+                    Text = GetNodeBaseText(depth, lane),
+                    Size = _nodeSize,
+                    CustomMinimumSize = _nodeSize,
+                    MouseFilter = MouseFilterEnum.Stop
+                };
+
+                float yBottom = viewport.Y * 0.82f;
+                float spacingY = viewport.Y * 0.075f;
+                float y = yBottom - depth * spacingY;
+                float xCenter = viewport.X * 0.5f;
+                float xSpread = 170f;
+                float x = xCenter + (lane - (laneCount - 1) / 2.0f) * xSpread;
+                button.Position = new Vector2(x, y);
+                button.Modulate = new Color(0.9f, 0.9f, 0.9f);
+
+                int depthCapture = depth;
+                int laneCapture = lane;
+                button.Pressed += () =>
+                {
+                    if (!button.Disabled)
+                    {
+                        AudioManager.Instance?.PlaySFX("res://Audio/click.ogg");
+                        EmitSignal(SignalName.NodeSelected, depthCapture, laneCapture);
+                    }
+                };
+                AddChild(button);
+                _nodeButtons[(depthCapture, laneCapture)] = button;
+            }
+        }
+
+        UpdateNodeStates(0);
+    }
+
+    private void ApplyNodeVisualState(int depth, int lane, MapNodeState state)
+    {
+        Button button = _nodeButtons[(depth, lane)];
+        string baseText = GetNodeBaseText(depth, lane);
+
+        switch (state)
+        {
+            case MapNodeState.Completed:
+                button.Text = $"[Done] {baseText}";
+                button.Disabled = true;
+                button.Modulate = new Color(0.35f, 0.35f, 0.38f, 1f);
+                break;
+            case MapNodeState.Current:
+                button.Text = $"[HERE] {baseText}";
+                button.Disabled = false;
+                button.Modulate = new Color(0.74f, 0.70f, 0.58f, 1f);
+                break;
+            default:
+                button.Text = $"[Lock] {baseText}";
+                button.Disabled = true;
+                button.Modulate = new Color(0.52f, 0.56f, 0.62f, 0.45f);
+                break;
+        }
+    }
+
+    public MapNodeKind GetNodeKind(int depth, int lane)
+    {
+        return _nodeKinds.TryGetValue((depth, lane), out MapNodeKind kind)
+            ? kind
+            : MapNodeKind.Combat;
+    }
+
+    private MapNodeKind RollNodeKind(int depth)
+    {
+        if (depth == _lanesPerDepth.Length - 1)
+        {
+            return MapNodeKind.Boss;
+        }
+
+        int roll = _rng.RandiRange(0, 99);
+        if (roll < 50)
+        {
+            return MapNodeKind.Combat;
+        }
+        if (roll < 70)
+        {
+            return MapNodeKind.Question;
+        }
+        if (roll < 85)
+        {
+            return MapNodeKind.Chest;
+        }
+
+        return MapNodeKind.Shop;
+    }
+
+    private string GetNodeBaseText(int depth, int lane)
+    {
+        MapNodeKind kind = GetNodeKind(depth, lane);
+        return kind switch
+        {
+            MapNodeKind.Boss => "Boss",
+            MapNodeKind.Combat => $"Fight {depth + 1}-{lane + 1}",
+            MapNodeKind.Question => $"? {depth + 1}-{lane + 1}",
+            MapNodeKind.Chest => $"Chest {depth + 1}-{lane + 1}",
+            MapNodeKind.Shop => $"Shop {depth + 1}-{lane + 1}",
+            _ => $"Node {depth + 1}-{lane + 1}"
+        };
+    }
+}
