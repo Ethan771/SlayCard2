@@ -6,6 +6,9 @@ namespace SlayCard;
 // 唯一总控入口：创建并连接所有系统。
 public partial class Main : Node
 {
+    private static readonly Color PlayerBaseColor = new(0.60f, 0.55f, 0.70f);
+    private static readonly Color EnemyBaseColor = new(0.65f, 0.50f, 0.50f);
+
     private GameManager _gameManager = null!;
     private CombatManager _combatManager = null!;
     private MapManager _mapManager = null!;
@@ -84,6 +87,8 @@ public partial class Main : Node
         _combatManager.EnemyIntentChanged += OnEnemyIntentChanged;
         _combatManager.EnemyKilled += OnEnemyKilled;
         _combatManager.AutoPlayStateChanged += OnAutoPlayStateChanged;
+        _combatManager.PlayerAttackPerformed += OnPlayerAttackPerformed;
+        _combatManager.EnemyAttackPerformed += OnEnemyAttackPerformed;
 
         _combatManager.EnemyDamaged += (position, value) =>
         {
@@ -242,7 +247,7 @@ public partial class Main : Node
         {
             Size = new Vector2(220, 300),
             CustomMinimumSize = new Vector2(220, 300),
-            Color = new Color(0.60f, 0.55f, 0.70f),
+            Color = PlayerBaseColor,
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         _entityLayer.AddChild(_playerRect);
@@ -407,7 +412,7 @@ public partial class Main : Node
             {
                 Size = new Vector2(enemyWidth, enemyHeight),
                 CustomMinimumSize = new Vector2(enemyWidth, enemyHeight),
-                Color = new Color(0.65f, 0.50f, 0.50f),
+                Color = EnemyBaseColor,
                 Position = new Vector2(centerX - halfWidth, centerY - enemyHeight * 0.5f),
                 MouseFilter = Control.MouseFilterEnum.Ignore
             };
@@ -669,5 +674,63 @@ public partial class Main : Node
         _autoPlayButton.Modulate = enabled
             ? new Color(0.55f, 1.0f, 0.55f, 1f)
             : new Color(1f, 1f, 1f, 1f);
+    }
+
+    private void OnPlayerAttackPerformed(int targetIndex)
+    {
+        if (targetIndex < 0 || targetIndex >= _enemyRects.Count)
+        {
+            return;
+        }
+
+        Control enemyRect = _enemyRects[targetIndex];
+        if (!GodotObject.IsInstanceValid(enemyRect))
+        {
+            return;
+        }
+
+        AnimateAttackerTowards(_playerRect, enemyRect, 28f);
+        FlashTarget(enemyRect, EnemyBaseColor, new Color(0.92f, 0.72f, 0.72f));
+    }
+
+    private void OnEnemyAttackPerformed(int enemyIndex)
+    {
+        if (enemyIndex < 0 || enemyIndex >= _enemyRects.Count)
+        {
+            return;
+        }
+
+        Control enemyRect = _enemyRects[enemyIndex];
+        if (!GodotObject.IsInstanceValid(enemyRect))
+        {
+            return;
+        }
+
+        AnimateAttackerTowards(enemyRect, _playerRect, 22f);
+        FlashTarget(_playerRect, PlayerBaseColor, new Color(0.82f, 0.72f, 0.88f));
+    }
+
+    private static void AnimateAttackerTowards(Control attacker, Control target, float dashDistance)
+    {
+        Vector2 attackerCenter = attacker.GlobalPosition + attacker.Size * 0.5f;
+        Vector2 targetCenter = target.GlobalPosition + target.Size * 0.5f;
+        Vector2 direction = (targetCenter - attackerCenter).Normalized();
+        Vector2 start = attacker.Position;
+        Vector2 dashPosition = start + direction * dashDistance;
+
+        var tween = attacker.CreateTween();
+        tween.TweenProperty(attacker, "position", dashPosition, 0.09f)
+            .SetEase(Tween.EaseType.Out)
+            .SetTrans(Tween.TransitionType.Quad);
+        tween.TweenProperty(attacker, "position", start, 0.12f)
+            .SetEase(Tween.EaseType.In)
+            .SetTrans(Tween.TransitionType.Quad);
+    }
+
+    private static void FlashTarget(ColorRect targetRect, Color baseColor, Color flashColor)
+    {
+        var tween = targetRect.CreateTween();
+        tween.TweenProperty(targetRect, "color", flashColor, 0.05f);
+        tween.TweenProperty(targetRect, "color", baseColor, 0.12f);
     }
 }

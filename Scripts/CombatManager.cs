@@ -16,6 +16,8 @@ public partial class CombatManager : Control
     [Signal] public delegate void EnemyDamagedEventHandler(Vector2 worldPosition, int value);
     [Signal] public delegate void PlayerDamagedEventHandler(Vector2 worldPosition, int value);
     [Signal] public delegate void EnemyKilledEventHandler(int enemyIndex);
+    [Signal] public delegate void PlayerAttackPerformedEventHandler(int targetIndex);
+    [Signal] public delegate void EnemyAttackPerformedEventHandler(int enemyIndex);
     [Signal] public delegate void AutoPlayStateChangedEventHandler(bool isAutoPlaying);
 
     private readonly Random _rng = new();
@@ -320,6 +322,8 @@ public partial class CombatManager : Control
             return;
         }
 
+        EmitSignal(SignalName.PlayerAttackPerformed, targetIndex);
+
         int modifiedDamage = baseDamage;
         if (_playerWeakStacks > 0)
         {
@@ -354,6 +358,8 @@ public partial class CombatManager : Control
         {
             return;
         }
+
+        EmitSignal(SignalName.EnemyAttackPerformed, enemyIndex);
 
         int modifiedDamage = baseDamage;
         if (_enemyWeakStacks[enemyIndex] > 0)
