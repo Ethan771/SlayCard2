@@ -13,6 +13,8 @@ public partial class RewardManager : Control
     private readonly List<CardData> _rewardPool = new();
     private readonly List<CardUI> _optionUis = new();
 
+    private HBoxContainer _cardsBox = null!;
+
     public override void _Ready()
     {
         Size = new Vector2(1280, 720);
@@ -59,40 +61,67 @@ public partial class RewardManager : Control
         var title = new Label
         {
             Text = "Choose 1 card",
-            Position = new Vector2(30, 30),
+            Position = new Vector2(30, 24),
             Size = new Vector2(240, 34),
             CustomMinimumSize = new Vector2(240, 34),
             MouseFilter = MouseFilterEnum.Ignore
         };
+        title.AddThemeFontSizeOverride("font_size", 18);
         AddChild(title);
+
+        _cardsBox = new HBoxContainer
+        {
+            Position = Vector2.Zero,
+            Size = new Vector2(460, 220),
+            CustomMinimumSize = new Vector2(460, 220),
+            Alignment = BoxContainer.AlignmentMode.Center,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        _cardsBox.AddThemeConstantOverride("separation", 40);
+        AddChild(_cardsBox);
+
+        CenterCardsBox();
+    }
+
+    private void CenterCardsBox()
+    {
+        Vector2 viewport = GetViewportRect().Size;
+        _cardsBox.Position = new Vector2(viewport.X * 0.5f - _cardsBox.Size.X * 0.5f, viewport.Y * 0.5f - _cardsBox.Size.Y * 0.5f);
     }
 
     private void BuildRewardOptions()
     {
         ClearOptions();
+
         for (int i = 0; i < 3; i++)
         {
             CardData data = _rewardPool[_rng.Next(_rewardPool.Count)].Clone();
             var cardUi = new CardUI
             {
-                Position = new Vector2(250 + i * 260, 210),
-                MouseFilter = MouseFilterEnum.Stop
+                MouseFilter = MouseFilterEnum.Stop,
+                EnableDragging = false,
+                IsRewardCard = true,
+                ZIndex = 100
             };
 
-            AddChild(cardUi);
+            _cardsBox.AddChild(cardUi);
             cardUi.Setup(data);
-            cardUi.CardReleased += (_, shouldPlay) =>
-            {
-                if (!shouldPlay)
-                {
-                    return;
-                }
-
-                EmitSignal(SignalName.RewardPicked, data);
-            };
-
+            cardUi.CardClicked += _ => OnRewardCardClicked(data);
             _optionUis.Add(cardUi);
         }
+    }
+
+    private void OnRewardCardClicked(CardData pickedCard)
+    {
+        EmitSignal(SignalName.RewardPicked, pickedCard);
+
+        var tween = CreateTween();
+        foreach (CardUI cardUi in _optionUis)
+        {
+            tween.TweenProperty(cardUi, "modulate:a", 0f, 0.16f);
+        }
+
+        tween.Finished += QueueFree;
     }
 
     private void ClearOptions()

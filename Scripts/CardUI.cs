@@ -1,11 +1,13 @@
 using Godot;
+using System;
 
 namespace SlayCard;
 
 // 单张卡牌可视与交互控件：负责拖拽与打出判定。
 public partial class CardUI : Control
 {
-    [Signal] public delegate void CardReleasedEventHandler(CardUI cardUi, bool shouldPlay);
+    [Signal] public delegate void CardReleasedEventHandler(CardUI cardUi, bool shouldPlay, int targetIndex);
+    [Signal] public delegate void CardClickedEventHandler(CardUI cardUi);
 
     private static readonly Color AttackColor = new(0.75f, 0.45f, 0.45f);
     private static readonly Color BlockColor = new(0.45f, 0.55f, 0.70f);
@@ -13,6 +15,9 @@ public partial class CardUI : Control
     private static readonly Vector2 CardSize = new(125, 180);
 
     public CardData CardData { get; private set; } = new();
+    public bool EnableDragging { get; set; } = true;
+    public bool IsRewardCard { get; set; }
+    public Func<Vector2, int>? TargetResolver { get; set; }
 
     private ColorRect _backgroundRect = null!;
     private Label _nameLabel = null!;
@@ -25,6 +30,7 @@ public partial class CardUI : Control
     private Vector2 _homePosition;
     private float _originalRotation;
     private int _originalZIndex;
+    private bool _isHoverRaised;
 
     public override void _Ready()
     {
@@ -49,6 +55,12 @@ public partial class CardUI : Control
 
     public override void _GuiInput(InputEvent @event)
     {
+        if ((IsRewardCard || !EnableDragging) && @event is InputEventMouseButton clickButton && clickButton.ButtonIndex == MouseButton.Left && !clickButton.Pressed)
+        {
+            EmitSignal(SignalName.CardClicked, this);
+            return;
+        }
+
         if (@event is InputEventMouseButton mouseButton && mouseButton.ButtonIndex == MouseButton.Left)
         {
             if (mouseButton.Pressed)
@@ -67,9 +79,11 @@ public partial class CardUI : Control
                 ZIndex = _originalZIndex;
 
                 float releaseY = GetGlobalMousePosition().Y;
-                bool shouldPlay = releaseY < GetViewportRect().Size.Y * 0.65f;
+                bool shouldPlay = releaseY < GetViewportRect().Size.Y * 0.85f;
+                int targetIndex = TargetResolver?.Invoke(GetGlobalMousePosition()) ?? -1;
+                shouldPlay = shouldPlay && targetIndex >= 0;
 
-                EmitSignal(SignalName.CardReleased, this, shouldPlay);
+                EmitSignal(SignalName.CardReleased, this, shouldPlay, targetIndex);
 
                 if (!shouldPlay)
                 {
@@ -100,21 +114,26 @@ public partial class CardUI : Control
 
     private void OnMouseEntered()
     {
-        if (_isDragging)
+        if (_isDragging || IsRewardCard)
         {
             return;
         }
 
-        Position = _homePosition + new Vector2(0, -18f);
+        _isHoverRaised = true;
+        _originalZIndex = ZIndex;
+        ZIndex = 2000;
+        Position = _homePosition + new Vector2(0, -60f);
     }
 
     private void OnMouseExited()
     {
-        if (_isDragging)
+        if (_isDragging || IsRewardCard || !_isHoverRaised)
         {
             return;
         }
 
+        _isHoverRaised = false;
+        ZIndex = _originalZIndex;
         Position = _homePosition;
     }
 

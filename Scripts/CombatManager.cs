@@ -4,16 +4,17 @@ using Godot;
 
 namespace SlayCard;
 
-// 战斗管理器：处理抽牌、出牌、能量与回合推进。
+// 战斗管理器：支持多敌人、目标判定、抽牌与回合推进。
 public partial class CombatManager : Control
 {
     [Signal] public delegate void CombatWonEventHandler();
     [Signal] public delegate void CombatLostEventHandler();
-    [Signal] public delegate void CombatStateChangedEventHandler(int energy, int drawPile, int discardPile, int enemyHealth);
+    [Signal] public delegate void CombatStateChangedEventHandler(int energy, int drawPile, int discardPile);
+    [Signal] public delegate void EnemiesStateChangedEventHandler(Godot.Collections.Array<int> enemyHealths);
+    [Signal] public delegate void EnemyIntentChangedEventHandler(string intentText);
     [Signal] public delegate void TurnStateChangedEventHandler(bool isPlayerTurn);
     [Signal] public delegate void EnemyDamagedEventHandler(Vector2 worldPosition, int value);
     [Signal] public delegate void PlayerDamagedEventHandler(Vector2 worldPosition, int value);
-    [Signal] public delegate void EnemyIntentChangedEventHandler(string intentText);
 
     private readonly Random _rng = new();
     private const float HandArcAngleSpread = 24f;
@@ -22,16 +23,15 @@ public partial class CombatManager : Control
     private readonly List<CardData> _discardPile = new();
     private readonly List<CardData> _hand = new();
     private readonly List<CardUI> _handUis = new();
+    private readonly List<Control> _enemyTargetNodes = new();
 
     private Control _handRoot = null!;
-    private Label _enemyLabel = null!;
-    private Label _energyLabel = null!;
 
-    private EnemyData _enemy = null!;
+    public List<EnemyData> ActiveEnemies { get; } = new();
+
     private GameManager _gameManager = null!;
     private int _energy;
     private int _playerBlock;
-    private int _enemyBlock;
     private bool _enemyWillAttack = true;
     private bool _isPlayerTurn;
 
@@ -45,15 +45,19 @@ public partial class CombatManager : Control
         BuildCombatUi();
     }
 
-    public void StartCombat(List<CardData> deck, EnemyData enemy)
+    public void StartCombat(List<CardData> deck, List<EnemyData> enemies)
     {
         Visible = true;
-        _enemy = enemy;
-        _enemy.ResetHealth();
+        ActiveEnemies.Clear();
+        foreach (EnemyData enemy in enemies)
+        {
+            enemy.ResetHealth();
+            ActiveEnemies.Add(enemy);
+        }
+
         _drawPile.Clear();
         _discardPile.Clear();
         _hand.Clear();
-        _enemyBlock = 0;
         _enemyWillAttack = true;
 
         foreach (CardData card in deck)
@@ -69,6 +73,12 @@ public partial class CombatManager : Control
     public void BindGameManager(GameManager gameManager)
     {
         _gameManager = gameManager;
+    }
+
+    public void SetEnemyTargetNodes(List<Control> enemyNodes)
+    {
+        _enemyTargetNodes.Clear();
+        _enemyTargetNodes.AddRange(enemyNodes);
     }
 
     public void HideCombat()
@@ -131,7 +141,7 @@ public partial class CombatManager : Control
         }
     }
 
-    private void PlayCard(CardData card)
+    private void PlayCard(CardData card, int targetIndex)
     {
         if (!_isPlayerTurn)
         {
@@ -143,14 +153,21 @@ public partial class CombatManager : Control
             return;
         }
 
+        if (targetIndex < 0 || targetIndex >= ActiveEnemies.Count)
+        {
+            return;
+        }
+
         _energy -= card.Cost;
 
         if (card.Damage > 0)
         {
-            int realDamage = Mathf.Max(0, card.Damage - _enemyBlock);
-            _enemyBlock = Mathf.Max(0, _enemyBlock - card.Damage);
-            _enemy.CurrentHealth -= realDamage;
-            EmitSignal(SignalName.EnemyDamaged, _enemyLabel.GlobalPosition, realDamage);
+            EnemyData target = ActiveEnemies[targetIndex];
+            target.CurrentHealth -= card.Damage;
+            Vector2 hitPos = _enemyTargetNodes.Count > targetIndex
+                ? _enemyTargetNodes[targetIndex].GlobalPosition
+                : new Vector2(GetViewportRect().Size.X * 0.75f, GetViewportRect().Size.Y * 0.45f);
+            EmitSignal(SignalName.EnemyDamaged, hitPos, card.Damage);
         }
 
         if (card.Block > 0)
@@ -161,7 +178,9 @@ public partial class CombatManager : Control
         _hand.Remove(card);
         _discardPile.Add(card);
 
-        if (_enemy.IsDead())
+        ActiveEnemies.RemoveAll(enemy => enemy.IsDead());
+
+        if (ActiveEnemies.Count == 0)
         {
             UpdateCombatState();
             EmitSignal(SignalName.CombatWon);
@@ -170,22 +189,22 @@ public partial class CombatManager : Control
 
         RebuildHandUi();
         UpdateCombatState();
-
-        if (_energy <= 0)
-        {
-            EndPlayerTurn();
-        }
     }
 
     private async void ExecuteEnemyTurn()
     {
         await ToSignal(GetTree().CreateTimer(0.45f), SceneTreeTimer.SignalName.Timeout);
 
+        int totalIncoming = 0;
         if (_enemyWillAttack)
         {
-            int incoming = _enemy.BaseAttack + _rng.Next(0, 3);
-            int finalDamage = Mathf.Max(0, incoming - _playerBlock);
-            _playerBlock = Mathf.Max(0, _playerBlock - incoming);
+            foreach (EnemyData enemy in ActiveEnemies)
+            {
+                totalIncoming += enemy.BaseAttack + _rng.Next(0, 3);
+            }
+
+            int finalDamage = Mathf.Max(0, totalIncoming - _playerBlock);
+            _playerBlock = Mathf.Max(0, _playerBlock - totalIncoming);
 
             if (finalDamage > 0)
             {
@@ -193,10 +212,6 @@ public partial class CombatManager : Control
             }
 
             EmitSignal(SignalName.PlayerDamaged, new Vector2(120, 80), finalDamage);
-        }
-        else
-        {
-            _enemyBlock += 6;
         }
 
         _enemyWillAttack = !_enemyWillAttack;
@@ -225,7 +240,10 @@ public partial class CombatManager : Control
             CardData card = _hand[i];
             var cardUi = new CardUI
             {
-                MouseFilter = MouseFilterEnum.Stop
+                MouseFilter = MouseFilterEnum.Stop,
+                IsRewardCard = false,
+                EnableDragging = true,
+                TargetResolver = ResolveTargetIndex
             };
 
             _handRoot.AddChild(cardUi);
@@ -237,7 +255,7 @@ public partial class CombatManager : Control
         ApplyHandArcLayout();
     }
 
-    private void OnCardReleased(CardUI cardUi, bool shouldPlay)
+    private void OnCardReleased(CardUI cardUi, bool shouldPlay, int targetIndex)
     {
         if (!_isPlayerTurn)
         {
@@ -251,7 +269,26 @@ public partial class CombatManager : Control
             return;
         }
 
-        PlayCard(cardUi.CardData);
+        PlayCard(cardUi.CardData, targetIndex);
+    }
+
+    private int ResolveTargetIndex(Vector2 globalMousePos)
+    {
+        for (int i = 0; i < _enemyTargetNodes.Count; i++)
+        {
+            Control targetNode = _enemyTargetNodes[i];
+            if (!GodotObject.IsInstanceValid(targetNode))
+            {
+                continue;
+            }
+
+            if (targetNode.GetGlobalRect().HasPoint(globalMousePos) && i < ActiveEnemies.Count)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private void BuildCombatUi()
@@ -265,29 +302,6 @@ public partial class CombatManager : Control
         };
         AddChild(background);
 
-        _enemyLabel = new Label
-        {
-            Position = Vector2.Zero,
-            Size = new Vector2(260, 40),
-            CustomMinimumSize = new Vector2(260, 40),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            MouseFilter = MouseFilterEnum.Ignore
-        };
-        _enemyLabel.AddThemeFontSizeOverride("font_size", 18);
-        _enemyLabel.Visible = false;
-        AddChild(_enemyLabel);
-
-        _energyLabel = new Label
-        {
-            Position = Vector2.Zero,
-            Size = new Vector2(1, 1),
-            CustomMinimumSize = new Vector2(1, 1),
-            MouseFilter = MouseFilterEnum.Ignore,
-            Visible = false
-        };
-        _energyLabel.AddThemeFontSizeOverride("font_size", 18);
-        AddChild(_energyLabel);
-
         _handRoot = new Control
         {
             Position = Vector2.Zero,
@@ -300,15 +314,17 @@ public partial class CombatManager : Control
 
     private void UpdateCombatState()
     {
-        string intentText = _enemyWillAttack
-            ? $"Intent: Attack {_enemy.BaseAttack}-{_enemy.BaseAttack + 2}"
-            : "Intent: Defend 6";
-        Vector2 viewportSize = GetViewportRect().Size;
-        _enemyLabel.Position = new Vector2(viewportSize.X * 0.75f - 130f, viewportSize.Y * 0.5f - 190f);
-        _enemyLabel.Text = $"{_enemy.DisplayName} HP: {Mathf.Max(0, _enemy.CurrentHealth)}  {intentText}";
-        _energyLabel.Text = $"Energy: {_energy}   Draw: {_drawPile.Count}   Discard: {_discardPile.Count}";
+        string intentText = _enemyWillAttack ? "Intent: Attack" : "Intent: Defend";
         EmitSignal(SignalName.EnemyIntentChanged, intentText);
-        EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count, _enemy.CurrentHealth);
+
+        var enemyHealths = new Godot.Collections.Array<int>();
+        foreach (EnemyData enemy in ActiveEnemies)
+        {
+            enemyHealths.Add(Mathf.Max(0, enemy.CurrentHealth));
+        }
+
+        EmitSignal(SignalName.EnemiesStateChanged, enemyHealths);
+        EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count);
     }
 
     private void ApplyHandArcLayout()
@@ -319,11 +335,12 @@ public partial class CombatManager : Control
             return;
         }
 
+        Vector2 viewportSize = GetViewportRect().Size;
+        float handArcRadius = viewportSize.Y + 280f;
+        Vector2 handCenterPosition = new(viewportSize.X * 0.5f, viewportSize.Y + 800f);
+
         for (int i = 0; i < totalCards; i++)
         {
-            Vector2 viewportSize = GetViewportRect().Size;
-            float handArcRadius = viewportSize.Y * 0.88f;
-            Vector2 handCenterPosition = new(viewportSize.X * 0.5f, viewportSize.Y + 200f);
             float t = totalCards == 1 ? 0.5f : i / (float)(totalCards - 1);
             float angleDeg = (t - 0.5f) * HandArcAngleSpread;
             float angleRad = Mathf.DegToRad(-90f + angleDeg);
