@@ -271,6 +271,7 @@ public partial class CombatManager : Control
         if (card.Block > 0)
         {
             _playerBlock += card.Block;
+            AudioManager.Instance?.PlaySFX("res://Audio/block.wav");
         }
 
         if (card.EnergyAmount > 0)
@@ -363,6 +364,11 @@ public partial class CombatManager : Control
         if (damageToHealth > 0)
         {
             ActiveEnemies[targetIndex].CurrentHealth -= damageToHealth;
+        }
+
+        if (damageToHealth > 0 || blocked > 0)
+        {
+            AudioManager.Instance?.PlaySFX("res://Audio/hit.wav");
         }
 
         Vector2 viewport = GetViewport().GetVisibleRect().Size;

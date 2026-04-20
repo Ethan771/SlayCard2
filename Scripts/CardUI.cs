@@ -66,6 +66,7 @@ public partial class CardUI : Control
             if (mouseButton.Pressed)
             {
                 EmitSignal(SignalName.ManualInteraction, this);
+                AudioManager.Instance?.PlaySFX("res://Audio/card_slide.wav");
                 _isDragging = true;
                 _dragOffset = GetGlobalMousePosition() - GlobalPosition;
                 _originalPosition = Position;
@@ -170,6 +171,7 @@ public partial class CardUI : Control
             return;
         }
 
+        AudioManager.Instance?.PlaySFX("res://Audio/card_slide.wav");
         _isHoverRaised = true;
         _originalZIndex = ZIndex;
         ZIndex = 2000;

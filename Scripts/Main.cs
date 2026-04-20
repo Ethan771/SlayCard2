@@ -9,6 +9,7 @@ public partial class Main : Node
     private static readonly Color PlayerBaseColor = new(0.60f, 0.55f, 0.70f);
     private static readonly Color EnemyBaseColor = new(0.65f, 0.50f, 0.50f);
 
+    private AudioManager _audioManager = null!;
     private GameManager _gameManager = null!;
     private CombatManager _combatManager = null!;
     private MapManager _mapManager = null!;
@@ -48,6 +49,10 @@ public partial class Main : Node
 
     public override void _Ready()
     {
+        _audioManager = new AudioManager();
+        AddChild(_audioManager);
+        _audioManager.PlayBGM("res://Audio/bgm.ogg");
+
         BuildHud();
         BuildDeathOverlay();
 
@@ -125,6 +130,7 @@ public partial class Main : Node
         ShowEntityVisuals(true);
         _lastPlayerWeak = 0;
         _lastPlayerVuln = 0;
+        _audioManager.PlayBGM("res://Audio/bgm.ogg");
 
         _combatManager.StartCombat(_gameManager.Deck, depth);
         BuildEnemyVisuals(_combatManager.ActiveEnemies);
@@ -143,6 +149,7 @@ public partial class Main : Node
 
         EnsureRewardManager();
         _rewardManager.ShowRewards();
+        _audioManager.PlaySFX("res://Audio/victory.wav");
         TryAutoAdvanceOutsideCombat();
     }
 
