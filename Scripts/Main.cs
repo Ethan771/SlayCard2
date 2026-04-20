@@ -23,6 +23,10 @@ public partial class Main : Node
     private Label _playerHpLabel = null!;
     private Label _enemyIntentLabel = null!;
     private Label _enemyHpLabel = null!;
+    private Label _playerBodyHpLabel = null!;
+    private Label _enemyBodyHpLabel = null!;
+    private ColorRect _playerAvatarFrame = null!;
+    private ColorRect _enemyAvatarFrame = null!;
     private int _currentEnemyMaxHealth;
     private int _currentEnergy;
 
@@ -194,6 +198,7 @@ public partial class Main : Node
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         _entityLayer.AddChild(_playerRect);
+        BuildPlayerAvatarAndBody();
 
         _enemyRect = new ColorRect
         {
@@ -203,6 +208,7 @@ public partial class Main : Node
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         _entityLayer.AddChild(_enemyRect);
+        BuildEnemyAvatarAndBody();
 
         _playerInfoBox = new VBoxContainer
         {
@@ -282,6 +288,7 @@ public partial class Main : Node
     {
         _currentEnergy = energy;
         _enemyHpLabel.Text = $"HP: {Mathf.Max(0, enemyHealth)}/{_currentEnemyMaxHealth}";
+        _enemyBodyHpLabel.Text = _enemyHpLabel.Text;
         RefreshHud();
     }
 
@@ -289,6 +296,7 @@ public partial class Main : Node
     {
         _hudLabel.Text = $"Energy: {_currentEnergy}   HP: {_gameManager.PlayerHealth}/{_gameManager.MaxPlayerHealth}   Gold: {_gameManager.Gold}";
         _playerHpLabel.Text = $"HP: {_gameManager.PlayerHealth}/{_gameManager.MaxPlayerHealth}";
+        _playerBodyHpLabel.Text = _playerHpLabel.Text;
     }
 
     private void OnViewportSizeChanged()
@@ -305,6 +313,9 @@ public partial class Main : Node
 
         ApplyAnchoredInfoBoxAboveEntity(_playerInfoBox, new Vector2(0.25f, 0.45f), entitySize, 40f);
         ApplyAnchoredInfoBoxAboveEntity(_enemyInfoBox, new Vector2(0.75f, 0.45f), entitySize, 40f);
+
+        LayoutAvatarFrame(_playerAvatarFrame, entitySize);
+        LayoutAvatarFrame(_enemyAvatarFrame, entitySize);
     }
 
     private static void ApplyAnchoredRect(Control rect, Vector2 centerPercent, Vector2 size)
@@ -331,5 +342,160 @@ public partial class Main : Node
         box.OffsetTop = -(entitySize.Y * 0.5f + verticalGap + boxSize.Y);
         box.OffsetRight = boxSize.X * 0.5f;
         box.OffsetBottom = -(entitySize.Y * 0.5f + verticalGap);
+    }
+
+    private void BuildPlayerAvatarAndBody()
+    {
+        _playerAvatarFrame = new ColorRect
+        {
+            Color = new Color(0.24f, 0.24f, 0.30f),
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _playerRect.AddChild(_playerAvatarFrame);
+
+        var armorTop = new ColorRect
+        {
+            Color = new Color(0.60f, 0.55f, 0.65f),
+            Position = new Vector2(52, 10),
+            Size = new Vector2(76, 18),
+            CustomMinimumSize = new Vector2(76, 18),
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _playerAvatarFrame.AddChild(armorTop);
+
+        var armorBottom = new ColorRect
+        {
+            Color = new Color(0.58f, 0.53f, 0.62f),
+            Position = new Vector2(62, 32),
+            Size = new Vector2(56, 24),
+            CustomMinimumSize = new Vector2(56, 24),
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _playerAvatarFrame.AddChild(armorBottom);
+
+        var youLabel = new Label
+        {
+            Text = "[YOU]",
+            Position = new Vector2(56, 58),
+            Size = new Vector2(86, 20),
+            CustomMinimumSize = new Vector2(86, 20),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        youLabel.AddThemeFontSizeOverride("font_size", 16);
+        _playerAvatarFrame.AddChild(youLabel);
+
+        var lowerInfo = new VBoxContainer
+        {
+            Position = new Vector2(10, 205),
+            Size = new Vector2(180, 84),
+            CustomMinimumSize = new Vector2(180, 84),
+            Alignment = BoxContainer.AlignmentMode.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _playerRect.AddChild(lowerInfo);
+
+        var nameLabel = new Label
+        {
+            Text = "Player",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        nameLabel.AddThemeFontSizeOverride("font_size", 18);
+        lowerInfo.AddChild(nameLabel);
+
+        _playerBodyHpLabel = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _playerBodyHpLabel.AddThemeFontSizeOverride("font_size", 18);
+        lowerInfo.AddChild(_playerBodyHpLabel);
+    }
+
+    private void BuildEnemyAvatarAndBody()
+    {
+        _enemyAvatarFrame = new ColorRect
+        {
+            Color = new Color(0.24f, 0.24f, 0.30f),
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _enemyRect.AddChild(_enemyAvatarFrame);
+
+        var slimeCircle = new Panel
+        {
+            Position = new Vector2(58, 8),
+            Size = new Vector2(64, 64),
+            CustomMinimumSize = new Vector2(64, 64),
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        var style = new StyleBoxFlat
+        {
+            BgColor = new Color(0.45f, 0.60f, 0.45f),
+            CornerRadiusTopLeft = 32,
+            CornerRadiusTopRight = 32,
+            CornerRadiusBottomLeft = 32,
+            CornerRadiusBottomRight = 32
+        };
+        slimeCircle.AddThemeStyleboxOverride("panel", style);
+        _enemyAvatarFrame.AddChild(slimeCircle);
+
+        var eyeLabel = new Label
+        {
+            Text = "··",
+            Position = new Vector2(17, 18),
+            Size = new Vector2(30, 24),
+            CustomMinimumSize = new Vector2(30, 24),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        eyeLabel.AddThemeFontSizeOverride("font_size", 22);
+        slimeCircle.AddChild(eyeLabel);
+
+        var slimeLabel = new Label
+        {
+            Text = "[Slime]",
+            Position = new Vector2(52, 72),
+            Size = new Vector2(86, 20),
+            CustomMinimumSize = new Vector2(86, 20),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        slimeLabel.AddThemeFontSizeOverride("font_size", 16);
+        _enemyAvatarFrame.AddChild(slimeLabel);
+
+        var lowerInfo = new VBoxContainer
+        {
+            Position = new Vector2(10, 205),
+            Size = new Vector2(180, 84),
+            CustomMinimumSize = new Vector2(180, 84),
+            Alignment = BoxContainer.AlignmentMode.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _enemyRect.AddChild(lowerInfo);
+
+        var nameLabel = new Label
+        {
+            Text = "Slime",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        nameLabel.AddThemeFontSizeOverride("font_size", 18);
+        lowerInfo.AddChild(nameLabel);
+
+        _enemyBodyHpLabel = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _enemyBodyHpLabel.AddThemeFontSizeOverride("font_size", 18);
+        lowerInfo.AddChild(_enemyBodyHpLabel);
+    }
+
+    private static void LayoutAvatarFrame(Control frame, Vector2 entitySize)
+    {
+        frame.Position = new Vector2(10, 10);
+        frame.Size = new Vector2(entitySize.X - 20, entitySize.Y / 3f - 10f);
+        frame.CustomMinimumSize = frame.Size;
     }
 }
