@@ -905,7 +905,7 @@ public partial class Main : Node
         _deckOverlay.Visible = !_deckOverlay.Visible;
         if (_deckOverlay.Visible)
         {
-            _deckOverlay.Raise();
+            _deckOverlay.MoveToFront();
             RefreshDeckOverlay();
         }
     }
