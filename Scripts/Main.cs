@@ -108,6 +108,7 @@ public partial class Main : Node
         ShowEntityVisuals(false);
         _gameManager.AddGold(15);
         _gameManager.AdvanceFloor();
+        EnsureRewardManager();
         _rewardManager.ShowRewards();
     }
 
@@ -133,8 +134,19 @@ public partial class Main : Node
     private void OnRewardPicked(CardData pickedCard)
     {
         _gameManager.AddCardToDeck(pickedCard);
-        _rewardManager.HideRewards();
         _mapManager.ShowMap();
+    }
+
+    private void EnsureRewardManager()
+    {
+        if (GodotObject.IsInstanceValid(_rewardManager))
+        {
+            return;
+        }
+
+        _rewardManager = new RewardManager();
+        AddChild(_rewardManager);
+        _rewardManager.RewardPicked += OnRewardPicked;
     }
 
     private void BuildHud()
