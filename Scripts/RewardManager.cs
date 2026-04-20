@@ -8,12 +8,14 @@ namespace SlayCard;
 public partial class RewardManager : Control
 {
     [Signal] public delegate void RewardPickedEventHandler(CardData pickedCard);
+    [Signal] public delegate void RewardSkippedEventHandler();
 
     private readonly Random _rng = new();
     private readonly List<CardData> _rewardPool = new();
     private readonly List<CardUI> _optionUis = new();
 
     private HBoxContainer _cardsBox = null!;
+    private Button _skipButton = null!;
 
     public override void _Ready()
     {
@@ -80,6 +82,16 @@ public partial class RewardManager : Control
         _cardsBox.AddThemeConstantOverride("separation", 40);
         AddChild(_cardsBox);
 
+        _skipButton = new Button
+        {
+            Text = "Skip Reward",
+            Size = new Vector2(180, 38),
+            CustomMinimumSize = new Vector2(180, 38),
+            MouseFilter = MouseFilterEnum.Stop
+        };
+        _skipButton.Pressed += OnSkipPressed;
+        AddChild(_skipButton);
+
         CenterCardsBox();
     }
 
@@ -87,6 +99,7 @@ public partial class RewardManager : Control
     {
         Vector2 viewport = GetViewport().GetVisibleRect().Size;
         _cardsBox.Position = new Vector2(viewport.X * 0.5f - _cardsBox.Size.X * 0.5f, viewport.Y * 0.5f - _cardsBox.Size.Y * 0.5f);
+        _skipButton.Position = new Vector2(viewport.X * 0.5f - _skipButton.Size.X * 0.5f, _cardsBox.Position.Y + _cardsBox.Size.Y + 24f);
     }
 
     private void BuildRewardOptions()
@@ -122,6 +135,35 @@ public partial class RewardManager : Control
         }
 
         tween.Finished += QueueFree;
+    }
+
+    public async void AutoResolveReward(bool preferSkip)
+    {
+        if (!Visible)
+        {
+            return;
+        }
+
+        await ToSignal(GetTree().CreateTimer(0.5f), SceneTreeTimer.SignalName.Timeout);
+        if (!Visible)
+        {
+            return;
+        }
+
+        if (preferSkip || _optionUis.Count == 0)
+        {
+            OnSkipPressed();
+            return;
+        }
+
+        CardData pickedCard = _optionUis[0].CardData;
+        OnRewardCardClicked(pickedCard);
+    }
+
+    private void OnSkipPressed()
+    {
+        EmitSignal(SignalName.RewardSkipped);
+        QueueFree();
     }
 
     private void ClearOptions()

@@ -39,6 +39,30 @@ public partial class MapManager : Control
         Visible = false;
     }
 
+    public bool TrySelectFirstAvailableNode()
+    {
+        if (!Visible)
+        {
+            return false;
+        }
+
+        for (int depth = 0; depth < _lanesPerDepth.Length; depth++)
+        {
+            int laneCount = _lanesPerDepth[depth];
+            for (int lane = 0; lane < laneCount; lane++)
+            {
+                Button button = _nodeButtons[(depth, lane)];
+                if (!button.Disabled)
+                {
+                    EmitSignal(SignalName.NodeSelected, depth, lane);
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public void UpdateNodeStates(int currentFloorIndex)
     {
         for (int depth = 0; depth < _lanesPerDepth.Length; depth++)

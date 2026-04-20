@@ -422,6 +422,13 @@ public partial class CombatManager : Control
                 continue;
             }
 
+            if (intent.Type == EnemyIntentType.Debuff)
+            {
+                EmitSignal(SignalName.EnemyAttackPerformed, i);
+                _playerVulnerableStacks += Mathf.Max(1, intent.ApplyVulnerable);
+                continue;
+            }
+
             int hitCount = Mathf.Max(1, intent.HitCount);
             for (int hit = 0; hit < hitCount; hit++)
             {
@@ -432,6 +439,11 @@ public partial class CombatManager : Control
                     EmitSignal(SignalName.CombatLost);
                     return;
                 }
+            }
+
+            if (intent.ApplyVulnerable > 0)
+            {
+                _playerVulnerableStacks += intent.ApplyVulnerable;
             }
         }
 
@@ -483,27 +495,41 @@ public partial class CombatManager : Control
                     Type = EnemyIntentType.Attack,
                     Damage = enemy.BaseAttack + _rng.Next(0, 3),
                     HitCount = 1,
-                    Block = 0
+                    Block = 0,
+                    ApplyVulnerable = _rng.Next(100) < 15 ? 1 : 0
                 };
             }
-            else if (roll < 70)
+            else if (roll < 65)
             {
                 _enemyIntents[i] = new EnemyIntent
                 {
                     Type = EnemyIntentType.Attack,
                     Damage = Mathf.Max(1, enemy.BaseAttack - 2 + _rng.Next(0, 2)),
                     HitCount = _rng.Next(2, 4),
-                    Block = 0
+                    Block = 0,
+                    ApplyVulnerable = 0
                 };
             }
-            else
+            else if (roll < 85)
             {
                 _enemyIntents[i] = new EnemyIntent
                 {
                     Type = EnemyIntentType.Defend,
                     Damage = 0,
                     HitCount = 1,
-                    Block = 5 + _rng.Next(0, 3)
+                    Block = 5 + _rng.Next(0, 3),
+                    ApplyVulnerable = 0
+                };
+            }
+            else
+            {
+                _enemyIntents[i] = new EnemyIntent
+                {
+                    Type = EnemyIntentType.Debuff,
+                    Damage = 0,
+                    HitCount = 1,
+                    Block = 0,
+                    ApplyVulnerable = 2
                 };
             }
         }
@@ -521,13 +547,24 @@ public partial class CombatManager : Control
             {
                 intents.Add($"Intent: Defend {intent.Block}");
             }
+            else if (intent.Type == EnemyIntentType.Debuff)
+            {
+                intents.Add($"Intent: Hex Vuln {intent.ApplyVulnerable}");
+            }
             else if (intent.HitCount > 1)
             {
                 intents.Add($"Intent: Attack {intent.Damage} x {intent.HitCount}");
             }
             else
             {
-                intents.Add($"Intent: Attack {intent.Damage}");
+                if (intent.ApplyVulnerable > 0)
+                {
+                    intents.Add($"Intent: Attack {intent.Damage} +V{intent.ApplyVulnerable}");
+                }
+                else
+                {
+                    intents.Add($"Intent: Attack {intent.Damage}");
+                }
             }
         }
 

@@ -38,6 +38,7 @@ public partial class Main : Node
     private readonly List<Label> _enemyVulnLabels = new();
 
     private int _currentEnergy;
+    private bool _isAutoUiFlowRunning;
 
     private Control _deathOverlay = null!;
 
@@ -67,6 +68,7 @@ public partial class Main : Node
         _rewardManager.HideRewards();
         ShowEntityVisuals(false);
         RefreshHud();
+        TryAutoAdvanceOutsideCombat();
     }
 
     private void ConnectSignals()
@@ -108,6 +110,7 @@ public partial class Main : Node
         };
 
         _rewardManager.RewardPicked += OnRewardPicked;
+        _rewardManager.RewardSkipped += OnRewardSkipped;
     }
 
     private void OnMapNodeSelected(int depth, int lane)
@@ -134,6 +137,7 @@ public partial class Main : Node
 
         EnsureRewardManager();
         _rewardManager.ShowRewards();
+        TryAutoAdvanceOutsideCombat();
     }
 
     private void OnCombatLost()
@@ -147,6 +151,13 @@ public partial class Main : Node
     {
         _gameManager.AddCardToDeck(pickedCard);
         _mapManager.ShowMap();
+        TryAutoAdvanceOutsideCombat();
+    }
+
+    private void OnRewardSkipped()
+    {
+        _mapManager.ShowMap();
+        TryAutoAdvanceOutsideCombat();
     }
 
     private void OnPlayerDied()
@@ -177,6 +188,7 @@ public partial class Main : Node
         _rewardManager = new RewardManager();
         AddChild(_rewardManager);
         _rewardManager.RewardPicked += OnRewardPicked;
+        _rewardManager.RewardSkipped += OnRewardSkipped;
     }
 
     private void BuildHud()
@@ -660,6 +672,7 @@ public partial class Main : Node
     {
         _combatManager.SetAutoPlaying(!_combatManager.IsAutoPlaying);
         RefreshAutoPlayButton();
+        TryAutoAdvanceOutsideCombat();
     }
 
     private void OnAutoPlayStateChanged(bool isAutoPlaying)
@@ -674,6 +687,41 @@ public partial class Main : Node
         _autoPlayButton.Modulate = enabled
             ? new Color(0.55f, 1.0f, 0.55f, 1f)
             : new Color(1f, 1f, 1f, 1f);
+    }
+
+    private async void TryAutoAdvanceOutsideCombat()
+    {
+        if (!_combatManager.IsAutoPlaying || _combatManager.Visible || _isAutoUiFlowRunning)
+        {
+            return;
+        }
+
+        _isAutoUiFlowRunning = true;
+        try
+        {
+            await ToSignal(GetTree().CreateTimer(0.4f), SceneTreeTimer.SignalName.Timeout);
+
+            if (!_combatManager.IsAutoPlaying || _combatManager.Visible)
+            {
+                return;
+            }
+
+            if (GodotObject.IsInstanceValid(_rewardManager) && _rewardManager.Visible)
+            {
+                bool preferSkip = _gameManager.Deck.Count >= 14;
+                _rewardManager.AutoResolveReward(preferSkip);
+                return;
+            }
+
+            if (_mapManager.Visible)
+            {
+                _mapManager.TrySelectFirstAvailableNode();
+            }
+        }
+        finally
+        {
+            _isAutoUiFlowRunning = false;
+        }
     }
 
     private void OnPlayerAttackPerformed(int targetIndex)

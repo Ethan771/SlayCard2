@@ -5,7 +5,8 @@ namespace SlayCard;
 public enum EnemyIntentType
 {
     Attack,
-    Defend
+    Defend,
+    Debuff
 }
 
 public struct EnemyIntent
@@ -14,6 +15,7 @@ public struct EnemyIntent
     public int Damage;
     public int Block;
     public int HitCount;
+    public int ApplyVulnerable;
 }
 
 // 敌人数据资源：支持纯代码动态构建战斗单位。
