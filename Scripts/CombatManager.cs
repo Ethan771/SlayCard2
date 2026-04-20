@@ -229,6 +229,30 @@ public partial class CombatManager : Control
         EndPlayerTurn();
     }
 
+    public bool GainPlayerEnergy(int amount)
+    {
+        if (!_isPlayerTurn || !Visible || amount <= 0)
+        {
+            return false;
+        }
+
+        _energy += amount;
+        UpdateCombatState();
+        return true;
+    }
+
+    public bool GainPlayerBlock(int amount)
+    {
+        if (!_isPlayerTurn || !Visible || amount <= 0)
+        {
+            return false;
+        }
+
+        _playerBlock += amount;
+        UpdateCombatState();
+        return true;
+    }
+
     private void DrawCards(int count)
     {
         for (int i = 0; i < count; i++)
