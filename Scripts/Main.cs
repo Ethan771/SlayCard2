@@ -58,6 +58,7 @@ public partial class Main : Node
     private RichTextLabel _deckListLabel = null!;
     private Control _roomOverlay = null!;
     private Label _roomTitleLabel = null!;
+    private ScrollContainer _roomScroll = null!;
     private VBoxContainer _roomContent = null!;
 
     private readonly List<RelicData> _relicPool = new();
@@ -1138,14 +1139,24 @@ public partial class Main : Node
         _roomTitleLabel.AddThemeFontSizeOverride("font_size", 24);
         panel.AddChild(_roomTitleLabel);
 
-        _roomContent = new VBoxContainer
+        _roomScroll = new ScrollContainer
         {
             Position = new Vector2(40, 68),
             Size = new Vector2(520, 280),
-            CustomMinimumSize = new Vector2(520, 280)
+            CustomMinimumSize = new Vector2(520, 280),
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto
+        };
+        panel.AddChild(_roomScroll);
+
+        _roomContent = new VBoxContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(500, 280)
         };
         _roomContent.AddThemeConstantOverride("separation", 14);
-        panel.AddChild(_roomContent);
+        _roomScroll.AddChild(_roomContent);
     }
 
     private MapNodeKind ResolveQuestionRoom(int depth)
@@ -1161,10 +1172,7 @@ public partial class Main : Node
     private void ShowRoomByKind(MapNodeKind kind)
     {
         _roomOverlay.Visible = true;
-        foreach (Node child in _roomContent.GetChildren())
-        {
-            child.QueueFree();
-        }
+        ClearRoomContent();
 
         switch (kind)
         {
@@ -1185,6 +1193,7 @@ public partial class Main : Node
 
     private void ShowCampfireRoom()
     {
+        ClearRoomContent();
         _roomTitleLabel.Text = "Campfire";
         AddRoomText("Take a short rest and recover 20% of max HP.");
         AddRoomButton("Rest", () =>
@@ -1194,6 +1203,7 @@ public partial class Main : Node
             AddRoomText($"Recovered {healAmount} HP.");
             CompleteNonCombatRoom();
         });
+        AddRoomButton("Upgrade 1 Card", ShowCampfireUpgradeChoice);
     }
 
     private void ShowChestRoom()
@@ -1215,6 +1225,7 @@ public partial class Main : Node
 
     private void ShowShopRoom()
     {
+        ClearRoomContent();
         _roomTitleLabel.Text = "Merchant";
         AddRoomText("Spend gold to buy cards/potions/relics or remove a card.");
 
@@ -1284,10 +1295,7 @@ public partial class Main : Node
 
     private void ShowCardRemovalChoice()
     {
-        foreach (Node child in _roomContent.GetChildren())
-        {
-            child.QueueFree();
-        }
+        ClearRoomContent();
 
         _roomTitleLabel.Text = "Remove a Card";
         AddRoomText("Choose 1 card to remove for 45 gold.");
@@ -1367,10 +1375,7 @@ public partial class Main : Node
     private void ShowPostCombatPotionChoice()
     {
         _roomOverlay.Visible = true;
-        foreach (Node child in _roomContent.GetChildren())
-        {
-            child.QueueFree();
-        }
+        ClearRoomContent();
 
         _roomTitleLabel.Text = "Combat Bonus";
         AddRoomText("You may take 1 random potion reward, or skip it.");
@@ -1391,6 +1396,81 @@ public partial class Main : Node
         });
 
         AddRoomButton("Skip Potion", CompleteCombatRewardFlow);
+    }
+
+    private void ShowCampfireUpgradeChoice()
+    {
+        ClearRoomContent();
+        _roomTitleLabel.Text = "Campfire Upgrade";
+        AddRoomText("Choose 1 card to upgrade.");
+
+        for (int i = 0; i < _gameManager.Deck.Count; i++)
+        {
+            int cardIndex = i;
+            CardData card = _gameManager.Deck[i];
+            AddRoomButton($"Upgrade {card.DisplayName}", () =>
+            {
+                if (cardIndex < 0 || cardIndex >= _gameManager.Deck.Count)
+                {
+                    AddRoomText("That card is no longer available.");
+                    return;
+                }
+
+                CardData upgraded = _gameManager.Deck[cardIndex];
+                ApplyCampfireUpgrade(upgraded);
+                AddRoomText($"Upgraded: {upgraded.DisplayName}");
+                _gameManager.EmitSignal(GameManager.SignalName.DeckChanged);
+                CompleteNonCombatRoom();
+            });
+        }
+
+        AddRoomButton("Cancel", ShowCampfireRoom);
+    }
+
+    private static void ApplyCampfireUpgrade(CardData card)
+    {
+        bool changed = false;
+        if (card.Damage > 0)
+        {
+            card.Damage += 3;
+            changed = true;
+        }
+
+        if (card.Block > 0)
+        {
+            card.Block += 3;
+            changed = true;
+        }
+
+        if (card.DrawAmount > 0)
+        {
+            card.DrawAmount += 1;
+            changed = true;
+        }
+
+        if (!changed && card.Cost > 0)
+        {
+            card.Cost -= 1;
+        }
+
+        if (!card.DisplayName.EndsWith("+"))
+        {
+            card.DisplayName += "+";
+        }
+    }
+
+    private void ClearRoomContent()
+    {
+        foreach (Node child in _roomContent.GetChildren())
+        {
+            _roomContent.RemoveChild(child);
+            child.QueueFree();
+        }
+
+        if (GodotObject.IsInstanceValid(_roomScroll))
+        {
+            _roomScroll.ScrollVertical = 0;
+        }
     }
 
     private void CompleteCombatRewardFlow()
