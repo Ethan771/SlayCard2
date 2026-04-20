@@ -1237,9 +1237,9 @@ public partial class Main : Node
             AddRoomText("Bought a potion.");
         });
 
-        AddRoomButton("Buy Relic (100g)", () =>
+        AddRoomButton("Buy Relic (80g)", () =>
         {
-            if (_gameManager.Gold < 100)
+            if (_gameManager.Gold < 80)
             {
                 AddRoomText("Not enough gold.");
                 return;
@@ -1252,13 +1252,13 @@ public partial class Main : Node
                 return;
             }
 
-            _gameManager.AddGold(-100);
+            _gameManager.AddGold(-80);
             AddRoomText($"Bought relic: {relic.Name}");
         });
 
-        AddRoomButton("Remove Random Card (60g)", () =>
+        AddRoomButton("Remove Random Card (45g)", () =>
         {
-            if (_gameManager.Gold < 60)
+            if (_gameManager.Gold < 45)
             {
                 AddRoomText("Not enough gold.");
                 return;
@@ -1270,7 +1270,7 @@ public partial class Main : Node
                 return;
             }
 
-            _gameManager.AddGold(-60);
+            _gameManager.AddGold(-45);
             AddRoomText("A card was removed from your deck.");
         });
 
