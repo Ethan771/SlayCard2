@@ -690,7 +690,10 @@ public partial class Main : Node
         }
 
         AnimateAttackerTowards(_playerRect, enemyRect, 28f);
-        FlashTarget(enemyRect, EnemyBaseColor, new Color(0.92f, 0.72f, 0.72f));
+        if (enemyRect is ColorRect enemyColorRect)
+        {
+            FlashTarget(enemyColorRect, EnemyBaseColor, new Color(0.92f, 0.72f, 0.72f));
+        }
     }
 
     private void OnEnemyAttackPerformed(int enemyIndex)
