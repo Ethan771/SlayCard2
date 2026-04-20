@@ -4,17 +4,18 @@ using Godot;
 
 namespace SlayCard;
 
-// 战斗管理器：支持多敌人、目标判定、抽牌与回合推进。
+// 战斗管理器：支持多敌人、护盾系统、目标判定与战斗状态。
 public partial class CombatManager : Control
 {
     [Signal] public delegate void CombatWonEventHandler();
     [Signal] public delegate void CombatLostEventHandler();
-    [Signal] public delegate void CombatStateChangedEventHandler(int energy, int drawPile, int discardPile);
-    [Signal] public delegate void EnemiesStateChangedEventHandler(Godot.Collections.Array<int> enemyHealths);
+    [Signal] public delegate void CombatStateChangedEventHandler(int energy, int drawPile, int discardPile, int playerBlock);
+    [Signal] public delegate void EnemiesStateChangedEventHandler(Godot.Collections.Array<int> enemyHealths, Godot.Collections.Array<int> enemyBlocks);
     [Signal] public delegate void EnemyIntentChangedEventHandler(string intentText);
     [Signal] public delegate void TurnStateChangedEventHandler(bool isPlayerTurn);
     [Signal] public delegate void EnemyDamagedEventHandler(Vector2 worldPosition, int value);
     [Signal] public delegate void PlayerDamagedEventHandler(Vector2 worldPosition, int value);
+    [Signal] public delegate void EnemyKilledEventHandler(int enemyIndex);
 
     private readonly Random _rng = new();
     private const float HandArcAngleSpread = 24f;
@@ -24,6 +25,7 @@ public partial class CombatManager : Control
     private readonly List<CardData> _hand = new();
     private readonly List<CardUI> _handUis = new();
     private readonly List<Control> _enemyTargetNodes = new();
+    private readonly List<int> _enemyBlocks = new();
 
     private Control _handRoot = null!;
 
@@ -32,7 +34,6 @@ public partial class CombatManager : Control
     private GameManager _gameManager = null!;
     private int _energy;
     private int _playerBlock;
-    private bool _enemyWillAttack = true;
     private bool _isPlayerTurn;
 
     public override void _Ready()
@@ -41,24 +42,28 @@ public partial class CombatManager : Control
         CustomMinimumSize = Size;
         MouseFilter = MouseFilterEnum.Pass;
         Visible = false;
-
         BuildCombatUi();
     }
 
-    public void StartCombat(List<CardData> deck, List<EnemyData> enemies)
+    public void StartCombat(List<CardData> deck, int floorIndex)
     {
         Visible = true;
+
         ActiveEnemies.Clear();
-        foreach (EnemyData enemy in enemies)
+        _enemyBlocks.Clear();
+
+        int enemyCount = _rng.Next(1, 4);
+        for (int i = 0; i < enemyCount; i++)
         {
-            enemy.ResetHealth();
-            ActiveEnemies.Add(enemy);
+            int hp = 24 + floorIndex * 6 + _rng.Next(0, 6);
+            int atk = 6 + floorIndex + _rng.Next(0, 3);
+            ActiveEnemies.Add(new EnemyData($"enemy_{floorIndex}_{i}", "Slime", hp, atk));
+            _enemyBlocks.Add(0);
         }
 
         _drawPile.Clear();
         _discardPile.Clear();
         _hand.Clear();
-        _enemyWillAttack = true;
 
         foreach (CardData card in deck)
         {
@@ -81,6 +86,13 @@ public partial class CombatManager : Control
         _enemyTargetNodes.AddRange(enemyNodes);
     }
 
+    public void FreezeCombat()
+    {
+        _isPlayerTurn = false;
+        SetHandInteractable(false);
+        EmitSignal(SignalName.TurnStateChanged, false);
+    }
+
     public void HideCombat()
     {
         Visible = false;
@@ -91,6 +103,11 @@ public partial class CombatManager : Control
         _isPlayerTurn = true;
         _energy = 3;
         _playerBlock = 0;
+        for (int i = 0; i < _enemyBlocks.Count; i++)
+        {
+            _enemyBlocks[i] = 0;
+        }
+
         DrawCards(5);
         RebuildHandUi();
         SetHandInteractable(true);
@@ -143,34 +160,31 @@ public partial class CombatManager : Control
 
     private void PlayCard(CardData card, int targetIndex)
     {
-        if (!_isPlayerTurn)
-        {
-            return;
-        }
-
-        if (card.Cost > _energy)
-        {
-            return;
-        }
-
-        if (targetIndex < 0 || targetIndex >= ActiveEnemies.Count)
+        if (!_isPlayerTurn || card.Cost > _energy)
         {
             return;
         }
 
         _energy -= card.Cost;
 
-        if (card.Damage > 0)
+        if (card.Type == CardType.Attack)
         {
-            EnemyData target = ActiveEnemies[targetIndex];
-            target.CurrentHealth -= card.Damage;
+            if (targetIndex < 0 || targetIndex >= ActiveEnemies.Count)
+            {
+                _energy += card.Cost;
+                return;
+            }
+
+            int damageAfterBlock = Mathf.Max(0, card.Damage - _enemyBlocks[targetIndex]);
+            _enemyBlocks[targetIndex] = Mathf.Max(0, _enemyBlocks[targetIndex] - card.Damage);
+            ActiveEnemies[targetIndex].CurrentHealth -= damageAfterBlock;
+
             Vector2 hitPos = _enemyTargetNodes.Count > targetIndex
                 ? _enemyTargetNodes[targetIndex].GlobalPosition
-                : new Vector2(GetViewportRect().Size.X * 0.75f, GetViewportRect().Size.Y * 0.45f);
-            EmitSignal(SignalName.EnemyDamaged, hitPos, card.Damage);
+                : new Vector2(GetViewportRect().Size.X * 0.75f, GetViewportRect().Size.Y * 0.55f);
+            EmitSignal(SignalName.EnemyDamaged, hitPos, damageAfterBlock);
         }
-
-        if (card.Block > 0)
+        else
         {
             _playerBlock += card.Block;
         }
@@ -178,7 +192,7 @@ public partial class CombatManager : Control
         _hand.Remove(card);
         _discardPile.Add(card);
 
-        ActiveEnemies.RemoveAll(enemy => enemy.IsDead());
+        CleanupDeadEnemies();
 
         if (ActiveEnemies.Count == 0)
         {
@@ -191,30 +205,45 @@ public partial class CombatManager : Control
         UpdateCombatState();
     }
 
+    private void CleanupDeadEnemies()
+    {
+        for (int i = ActiveEnemies.Count - 1; i >= 0; i--)
+        {
+            if (ActiveEnemies[i].CurrentHealth > 0)
+            {
+                continue;
+            }
+
+            ActiveEnemies.RemoveAt(i);
+            _enemyBlocks.RemoveAt(i);
+            if (_enemyTargetNodes.Count > i)
+            {
+                _enemyTargetNodes.RemoveAt(i);
+            }
+
+            EmitSignal(SignalName.EnemyKilled, i);
+        }
+    }
+
     private async void ExecuteEnemyTurn()
     {
         await ToSignal(GetTree().CreateTimer(0.45f), SceneTreeTimer.SignalName.Timeout);
 
         int totalIncoming = 0;
-        if (_enemyWillAttack)
+        foreach (EnemyData enemy in ActiveEnemies)
         {
-            foreach (EnemyData enemy in ActiveEnemies)
-            {
-                totalIncoming += enemy.BaseAttack + _rng.Next(0, 3);
-            }
-
-            int finalDamage = Mathf.Max(0, totalIncoming - _playerBlock);
-            _playerBlock = Mathf.Max(0, _playerBlock - totalIncoming);
-
-            if (finalDamage > 0)
-            {
-                _gameManager.LoseHealth(finalDamage);
-            }
-
-            EmitSignal(SignalName.PlayerDamaged, new Vector2(120, 80), finalDamage);
+            totalIncoming += enemy.BaseAttack + _rng.Next(0, 3);
         }
 
-        _enemyWillAttack = !_enemyWillAttack;
+        int finalDamage = Mathf.Max(0, totalIncoming - _playerBlock);
+        _playerBlock = Mathf.Max(0, _playerBlock - totalIncoming);
+
+        if (finalDamage > 0)
+        {
+            _gameManager.LoseHealth(finalDamage);
+        }
+
+        EmitSignal(SignalName.PlayerDamaged, new Vector2(120, 80), finalDamage);
         UpdateCombatState();
 
         if (_gameManager.PlayerHealth <= 0)
@@ -257,13 +286,7 @@ public partial class CombatManager : Control
 
     private void OnCardReleased(CardUI cardUi, bool shouldPlay, int targetIndex)
     {
-        if (!_isPlayerTurn)
-        {
-            cardUi.ResetPosition();
-            return;
-        }
-
-        if (!shouldPlay)
+        if (!_isPlayerTurn || !shouldPlay)
         {
             cardUi.ResetPosition();
             return;
@@ -314,17 +337,18 @@ public partial class CombatManager : Control
 
     private void UpdateCombatState()
     {
-        string intentText = _enemyWillAttack ? "Intent: Attack" : "Intent: Defend";
-        EmitSignal(SignalName.EnemyIntentChanged, intentText);
+        EmitSignal(SignalName.EnemyIntentChanged, "Intent: Attack");
 
         var enemyHealths = new Godot.Collections.Array<int>();
-        foreach (EnemyData enemy in ActiveEnemies)
+        var enemyBlocks = new Godot.Collections.Array<int>();
+        for (int i = 0; i < ActiveEnemies.Count; i++)
         {
-            enemyHealths.Add(Mathf.Max(0, enemy.CurrentHealth));
+            enemyHealths.Add(Mathf.Max(0, ActiveEnemies[i].CurrentHealth));
+            enemyBlocks.Add(_enemyBlocks[i]);
         }
 
-        EmitSignal(SignalName.EnemiesStateChanged, enemyHealths);
-        EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count);
+        EmitSignal(SignalName.EnemiesStateChanged, enemyHealths, enemyBlocks);
+        EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count, _playerBlock);
     }
 
     private void ApplyHandArcLayout()

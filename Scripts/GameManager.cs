@@ -10,6 +10,7 @@ public partial class GameManager : Node
     [Signal] public delegate void PlayerHealthChangedEventHandler(int currentHealth);
     [Signal] public delegate void DeckChangedEventHandler();
     [Signal] public delegate void FloorIndexChangedEventHandler(int floorIndex);
+    [Signal] public delegate void PlayerDiedEventHandler();
 
     public List<CardData> Deck { get; } = new();
     public int Gold { get; private set; }
@@ -25,7 +26,7 @@ public partial class GameManager : Node
     public void InitializeNewRun()
     {
         Deck.Clear();
-        Gold = 99;
+        Gold = 0;
         PlayerHealth = MaxPlayerHealth;
         CurrentFloorIndex = 0;
 
@@ -45,6 +46,11 @@ public partial class GameManager : Node
         EmitSignal(SignalName.FloorIndexChanged, CurrentFloorIndex);
     }
 
+    public void ResetRun()
+    {
+        InitializeNewRun();
+    }
+
     public void AddCardToDeck(CardData card)
     {
         Deck.Add(card.Clone());
@@ -61,6 +67,10 @@ public partial class GameManager : Node
     {
         PlayerHealth = Mathf.Max(0, PlayerHealth - amount);
         EmitSignal(SignalName.PlayerHealthChanged, PlayerHealth);
+        if (PlayerHealth <= 0)
+        {
+            EmitSignal(SignalName.PlayerDied);
+        }
     }
 
     public void Heal(int amount)

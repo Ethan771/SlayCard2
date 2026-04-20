@@ -79,9 +79,17 @@ public partial class CardUI : Control
                 ZIndex = _originalZIndex;
 
                 float releaseY = GetGlobalMousePosition().Y;
-                bool shouldPlay = releaseY < GetViewportRect().Size.Y * 0.85f;
                 int targetIndex = TargetResolver?.Invoke(GetGlobalMousePosition()) ?? -1;
-                shouldPlay = shouldPlay && targetIndex >= 0;
+                bool shouldPlay;
+                if (CardData.Type == CardType.Attack)
+                {
+                    shouldPlay = targetIndex >= 0;
+                }
+                else
+                {
+                    shouldPlay = releaseY < GetViewportRect().Size.Y * 0.5f;
+                    targetIndex = -1;
+                }
 
                 EmitSignal(SignalName.CardReleased, this, shouldPlay, targetIndex);
 

@@ -24,13 +24,14 @@ public partial class VfxManager : CanvasLayer
             CustomMinimumSize = new Vector2(120, 30),
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
+        label.AddThemeFontSizeOverride("font_size", 40);
 
         AddChild(label);
 
         var tween = CreateTween();
         tween.SetParallel(true);
-        tween.TweenProperty(label, "position:y", label.Position.Y - 40, 0.45f);
-        tween.TweenProperty(label, "modulate:a", 0f, 0.45f);
+        tween.TweenProperty(label, "position:y", label.Position.Y - 80, 1.5f);
+        tween.TweenProperty(label, "modulate:a", 0f, 1.5f);
         tween.Finished += () => label.QueueFree();
     }
 
