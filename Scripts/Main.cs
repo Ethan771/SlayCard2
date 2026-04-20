@@ -11,6 +11,7 @@ public partial class Main : Node
     private RewardManager _rewardManager = null!;
     private VfxManager _vfxManager = null!;
 
+    private Control _topUiContainer = null!;
     private Label _hudLabel = null!;
     private Button _endTurnButton = null!;
     private Control _entityLayer = null!;
@@ -21,6 +22,7 @@ public partial class Main : Node
     private Label _enemyNameLabel = null!;
     private Label _enemyHpLabel = null!;
     private int _currentEnemyMaxHealth;
+    private int _currentEnergy;
 
     public override void _Ready()
     {
@@ -40,6 +42,7 @@ public partial class Main : Node
 
         _combatManager.BindGameManager(_gameManager);
         ConnectSignals();
+        GetViewport().SizeChanged += OnViewportSizeChanged;
 
         _mapManager.ShowMap();
         _mapManager.UpdateNodeStates(_gameManager.CurrentFloorIndex);
@@ -132,28 +135,40 @@ public partial class Main : Node
         var canvasLayer = new CanvasLayer();
         AddChild(canvasLayer);
 
+        _topUiContainer = new Control
+        {
+            Position = new Vector2(30, 30),
+            Size = new Vector2(680, 90),
+            CustomMinimumSize = new Vector2(680, 90),
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        canvasLayer.AddChild(_topUiContainer);
+
         _hudLabel = new Label
         {
-            Position = new Vector2(16, 10),
+            Position = Vector2.Zero,
             Size = new Vector2(600, 32),
             CustomMinimumSize = new Vector2(600, 32),
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
-        canvasLayer.AddChild(_hudLabel);
+        _hudLabel.AddThemeFontSizeOverride("font_size", 18);
+        _topUiContainer.AddChild(_hudLabel);
 
         _endTurnButton = new Button
         {
             Text = "End Turn",
-            Position = new Vector2(1120, 14),
-            Size = new Vector2(140, 36),
-            CustomMinimumSize = new Vector2(140, 36),
+            Position = new Vector2(530, 0),
+            Size = new Vector2(150, 40),
+            CustomMinimumSize = new Vector2(150, 40),
             MouseFilter = Control.MouseFilterEnum.Stop,
             Visible = false
         };
+        _endTurnButton.AddThemeFontSizeOverride("font_size", 18);
         _endTurnButton.Pressed += () => _combatManager.EndPlayerTurn();
-        canvasLayer.AddChild(_endTurnButton);
+        _topUiContainer.AddChild(_endTurnButton);
 
         BuildEntityVisuals(canvasLayer);
+        UpdateResponsiveLayout();
     }
 
     private void BuildEntityVisuals(CanvasLayer canvasLayer)
@@ -170,7 +185,6 @@ public partial class Main : Node
 
         _playerRect = new ColorRect
         {
-            Position = new Vector2(70, 110),
             Size = new Vector2(200, 300),
             CustomMinimumSize = new Vector2(200, 300),
             Color = new Color(0.60f, 0.55f, 0.70f),
@@ -180,7 +194,6 @@ public partial class Main : Node
 
         _enemyRect = new ColorRect
         {
-            Position = new Vector2(1010, 110),
             Size = new Vector2(200, 300),
             CustomMinimumSize = new Vector2(200, 300),
             Color = new Color(0.65f, 0.50f, 0.50f),
@@ -191,43 +204,49 @@ public partial class Main : Node
         _playerNameLabel = new Label
         {
             Text = "Player",
-            Position = _playerRect.Position + new Vector2(16, 16),
+            Position = Vector2.Zero,
             Size = new Vector2(168, 30),
             CustomMinimumSize = new Vector2(168, 30),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.95f, 0.95f, 0.95f)
         };
+        _playerNameLabel.AddThemeFontSizeOverride("font_size", 18);
         _entityLayer.AddChild(_playerNameLabel);
 
         _playerHpLabel = new Label
         {
-            Position = _playerRect.Position + new Vector2(16, 52),
-            Size = new Vector2(168, 30),
-            CustomMinimumSize = new Vector2(168, 30),
+            Position = Vector2.Zero,
+            Size = new Vector2(200, 28),
+            CustomMinimumSize = new Vector2(200, 28),
+            HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.90f, 0.90f, 0.90f)
         };
+        _playerHpLabel.AddThemeFontSizeOverride("font_size", 18);
         _entityLayer.AddChild(_playerHpLabel);
 
         _enemyNameLabel = new Label
         {
             Text = "Enemy",
-            Position = _enemyRect.Position + new Vector2(16, 16),
+            Position = Vector2.Zero,
             Size = new Vector2(168, 30),
             CustomMinimumSize = new Vector2(168, 30),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.95f, 0.95f, 0.95f)
         };
+        _enemyNameLabel.AddThemeFontSizeOverride("font_size", 18);
         _entityLayer.AddChild(_enemyNameLabel);
 
         _enemyHpLabel = new Label
         {
-            Position = _enemyRect.Position + new Vector2(16, 52),
-            Size = new Vector2(168, 30),
-            CustomMinimumSize = new Vector2(168, 30),
+            Position = Vector2.Zero,
+            Size = new Vector2(200, 28),
+            CustomMinimumSize = new Vector2(200, 28),
+            HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = Control.MouseFilterEnum.Ignore,
             Modulate = new Color(0.90f, 0.90f, 0.90f)
         };
+        _enemyHpLabel.AddThemeFontSizeOverride("font_size", 18);
         _entityLayer.AddChild(_enemyHpLabel);
     }
 
@@ -238,12 +257,59 @@ public partial class Main : Node
 
     private void OnCombatStateChanged(int energy, int drawPile, int discardPile, int enemyHealth)
     {
+        _currentEnergy = energy;
         _enemyHpLabel.Text = $"HP: {Mathf.Max(0, enemyHealth)}/{_currentEnemyMaxHealth}";
+        RefreshHud();
     }
 
     private void RefreshHud()
     {
-        _hudLabel.Text = $"HP: {_gameManager.PlayerHealth}/{_gameManager.MaxPlayerHealth}   Gold: {_gameManager.Gold}   Deck: {_gameManager.Deck.Count}";
+        _hudLabel.Text = $"Energy: {_currentEnergy}   HP: {_gameManager.PlayerHealth}/{_gameManager.MaxPlayerHealth}   Gold: {_gameManager.Gold}";
         _playerHpLabel.Text = $"HP: {_gameManager.PlayerHealth}/{_gameManager.MaxPlayerHealth}";
+    }
+
+    private void OnViewportSizeChanged()
+    {
+        UpdateResponsiveLayout();
+    }
+
+    private void UpdateResponsiveLayout()
+    {
+        Vector2 entitySize = _playerRect.Size;
+
+        ApplyAnchoredRect(_playerRect, new Vector2(0.25f, 0.5f), entitySize);
+        ApplyAnchoredRect(_enemyRect, new Vector2(0.75f, 0.5f), entitySize);
+
+        _playerNameLabel.Position = _playerRect.Position + new Vector2(16, entitySize.Y * 0.4f);
+        _enemyNameLabel.Position = _enemyRect.Position + new Vector2(16, entitySize.Y * 0.4f);
+
+        ApplyAnchoredLabelAboveEntity(_playerHpLabel, new Vector2(0.25f, 0.5f), entitySize, 40f);
+        ApplyAnchoredLabelAboveEntity(_enemyHpLabel, new Vector2(0.75f, 0.5f), entitySize, 40f);
+    }
+
+    private static void ApplyAnchoredRect(Control rect, Vector2 centerPercent, Vector2 size)
+    {
+        rect.AnchorLeft = centerPercent.X;
+        rect.AnchorRight = centerPercent.X;
+        rect.AnchorTop = centerPercent.Y;
+        rect.AnchorBottom = centerPercent.Y;
+        rect.OffsetLeft = -size.X * 0.5f;
+        rect.OffsetTop = -size.Y * 0.5f;
+        rect.OffsetRight = size.X * 0.5f;
+        rect.OffsetBottom = size.Y * 0.5f;
+        rect.PivotOffset = size * 0.5f;
+    }
+
+    private static void ApplyAnchoredLabelAboveEntity(Label label, Vector2 centerPercent, Vector2 entitySize, float verticalGap)
+    {
+        Vector2 labelSize = label.Size;
+        label.AnchorLeft = centerPercent.X;
+        label.AnchorRight = centerPercent.X;
+        label.AnchorTop = centerPercent.Y;
+        label.AnchorBottom = centerPercent.Y;
+        label.OffsetLeft = -labelSize.X * 0.5f;
+        label.OffsetTop = -(entitySize.Y * 0.5f + verticalGap + labelSize.Y);
+        label.OffsetRight = labelSize.X * 0.5f;
+        label.OffsetBottom = -(entitySize.Y * 0.5f + verticalGap);
     }
 }

@@ -10,6 +10,7 @@ public partial class CardUI : Control
     private static readonly Color AttackColor = new(0.75f, 0.45f, 0.45f);
     private static readonly Color BlockColor = new(0.45f, 0.55f, 0.70f);
     private static readonly Color SkillColor = new(0.50f, 0.65f, 0.50f);
+    private static readonly Vector2 CardSize = new(125, 180);
 
     public CardData CardData { get; private set; } = new();
 
@@ -27,8 +28,8 @@ public partial class CardUI : Control
     public override void _Ready()
     {
         // 防雷：明确交互节点尺寸，避免 0x0 命中框。
-        Size = new Vector2(150, 220);
-        CustomMinimumSize = new Vector2(150, 220);
+        Size = CardSize;
+        CustomMinimumSize = CardSize;
         MouseFilter = MouseFilterEnum.Stop;
 
         BuildVisualTree();
@@ -99,43 +100,46 @@ public partial class CardUI : Control
         {
             Color = SkillColor,
             MouseFilter = MouseFilterEnum.Ignore,
-            Size = new Vector2(150, 220),
-            CustomMinimumSize = new Vector2(150, 220)
+            Size = CardSize,
+            CustomMinimumSize = CardSize
         };
         AddChild(_backgroundRect);
 
         _costLabel = new Label
         {
             Position = new Vector2(8, 8),
-            Size = new Vector2(30, 30),
-            CustomMinimumSize = new Vector2(30, 30),
+            Size = new Vector2(28, 28),
+            CustomMinimumSize = new Vector2(28, 28),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = MouseFilterEnum.Ignore,
             Modulate = new Color(0.93f, 0.93f, 0.93f)
         };
+        _costLabel.AddThemeFontSizeOverride("font_size", 18);
         AddChild(_costLabel);
 
         _nameLabel = new Label
         {
-            Position = new Vector2(12, 45),
-            Size = new Vector2(126, 24),
-            CustomMinimumSize = new Vector2(126, 24),
+            Position = new Vector2(10, 38),
+            Size = new Vector2(100, 24),
+            CustomMinimumSize = new Vector2(100, 24),
             HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = MouseFilterEnum.Ignore,
             Modulate = new Color(0.97f, 0.97f, 0.97f)
         };
+        _nameLabel.AddThemeFontSizeOverride("font_size", 18);
         AddChild(_nameLabel);
 
         _descriptionLabel = new Label
         {
-            Position = new Vector2(12, 82),
-            Size = new Vector2(126, 120),
-            CustomMinimumSize = new Vector2(126, 120),
+            Position = new Vector2(10, 68),
+            Size = new Vector2(100, 98),
+            CustomMinimumSize = new Vector2(100, 98),
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
             MouseFilter = MouseFilterEnum.Ignore,
             Modulate = new Color(0.90f, 0.90f, 0.90f)
         };
+        _descriptionLabel.AddThemeFontSizeOverride("font_size", 18);
         AddChild(_descriptionLabel);
     }
 

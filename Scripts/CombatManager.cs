@@ -15,9 +15,7 @@ public partial class CombatManager : Control
     [Signal] public delegate void PlayerDamagedEventHandler(Vector2 worldPosition, int value);
 
     private readonly Random _rng = new();
-    private const float HandArcRadius = 1000f;
-    private const float HandArcAngleSpread = 30f;
-    private static readonly Vector2 HandCenterPosition = new(640, 1400);
+    private const float HandArcAngleSpread = 24f;
 
     private readonly List<CardData> _drawPile = new();
     private readonly List<CardData> _discardPile = new();
@@ -268,21 +266,24 @@ public partial class CombatManager : Control
 
         _enemyLabel = new Label
         {
-            Position = new Vector2(530, 90),
+            Position = Vector2.Zero,
             Size = new Vector2(260, 40),
             CustomMinimumSize = new Vector2(260, 40),
             HorizontalAlignment = HorizontalAlignment.Center,
             MouseFilter = MouseFilterEnum.Ignore
         };
+        _enemyLabel.AddThemeFontSizeOverride("font_size", 18);
         AddChild(_enemyLabel);
 
         _energyLabel = new Label
         {
-            Position = new Vector2(30, 30),
-            Size = new Vector2(220, 32),
-            CustomMinimumSize = new Vector2(220, 32),
-            MouseFilter = MouseFilterEnum.Ignore
+            Position = Vector2.Zero,
+            Size = new Vector2(1, 1),
+            CustomMinimumSize = new Vector2(1, 1),
+            MouseFilter = MouseFilterEnum.Ignore,
+            Visible = false
         };
+        _energyLabel.AddThemeFontSizeOverride("font_size", 18);
         AddChild(_energyLabel);
 
         _handRoot = new Control
@@ -300,7 +301,9 @@ public partial class CombatManager : Control
         string intentText = _enemyWillAttack
             ? $"Intent: Attack {_enemy.BaseAttack}-{_enemy.BaseAttack + 2}"
             : "Intent: Defend 6";
-        _enemyLabel.Text = $"{_enemy.DisplayName} HP: {Mathf.Max(0, _enemy.CurrentHealth)}  Block: {_enemyBlock}  {intentText}";
+        Vector2 viewportSize = GetViewportRect().Size;
+        _enemyLabel.Position = new Vector2(viewportSize.X * 0.75f - 130f, viewportSize.Y * 0.5f - 190f);
+        _enemyLabel.Text = $"{_enemy.DisplayName} HP: {Mathf.Max(0, _enemy.CurrentHealth)}  {intentText}";
         _energyLabel.Text = $"Energy: {_energy}   Draw: {_drawPile.Count}   Discard: {_discardPile.Count}";
         EmitSignal(SignalName.CombatStateChanged, _energy, _drawPile.Count, _discardPile.Count, _enemy.CurrentHealth);
     }
@@ -315,12 +318,15 @@ public partial class CombatManager : Control
 
         for (int i = 0; i < totalCards; i++)
         {
+            Vector2 viewportSize = GetViewportRect().Size;
+            float handArcRadius = viewportSize.Y * 0.92f;
+            Vector2 handCenterPosition = new(viewportSize.X * 0.5f, viewportSize.Y * 1.06f);
             float t = totalCards == 1 ? 0.5f : i / (float)(totalCards - 1);
             float angleDeg = (t - 0.5f) * HandArcAngleSpread;
             float angleRad = Mathf.DegToRad(-90f + angleDeg);
 
-            float x = HandCenterPosition.X + Mathf.Cos(angleRad) * HandArcRadius;
-            float y = HandCenterPosition.Y + Mathf.Sin(angleRad) * HandArcRadius;
+            float x = handCenterPosition.X + Mathf.Cos(angleRad) * handArcRadius;
+            float y = handCenterPosition.Y + Mathf.Sin(angleRad) * handArcRadius;
             float rotation = Mathf.DegToRad(angleDeg * 0.9f);
 
             _handUis[i].SetHomeTransform(new Vector2(x, y), rotation);
