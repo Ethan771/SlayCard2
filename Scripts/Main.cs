@@ -21,6 +21,7 @@ public partial class Main : Node
     private Label _hudLabel = null!;
     private Button _endTurnButton = null!;
     private Button _autoPlayButton = null!;
+    private Button _deckButton = null!;
 
     private Control _entityLayer = null!;
     private ColorRect _playerRect = null!;
@@ -47,15 +48,27 @@ public partial class Main : Node
     private int _lastPlayerVuln;
 
     private Control _deathOverlay = null!;
+    private Control _deckOverlay = null!;
+    private RichTextLabel _deckListLabel = null!;
+    private Control _roomOverlay = null!;
+    private Label _roomTitleLabel = null!;
+    private VBoxContainer _roomContent = null!;
+
+    private readonly List<RelicData> _relicPool = new();
+    private readonly List<PotionData> _potionPool = new();
+    private readonly List<CardData> _shopCardPool = new();
 
     public override void _Ready()
     {
         _audioManager = new AudioManager();
         AddChild(_audioManager);
         _audioManager.PlayBGM(DefaultBgmPath);
+        InitializeMetaPools();
 
         BuildHud();
         BuildDeathOverlay();
+        BuildDeckOverlay();
+        BuildRoomOverlay();
 
         _gameManager = new GameManager();
         _combatManager = new CombatManager();
@@ -86,6 +99,8 @@ public partial class Main : Node
         _gameManager.GoldChanged += _ => RefreshHud();
         _gameManager.PlayerHealthChanged += _ => RefreshHud();
         _gameManager.DeckChanged += RefreshHud;
+        _gameManager.RelicsChanged += RefreshHud;
+        _gameManager.PotionsChanged += RefreshHud;
         _gameManager.FloorIndexChanged += floorIndex => _mapManager.UpdateNodeStates(floorIndex);
         _gameManager.PlayerDied += OnPlayerDied;
 
@@ -125,18 +140,32 @@ public partial class Main : Node
 
     private void OnMapNodeSelected(int depth, int lane)
     {
-        _mapManager.HideMap();
-        _endTurnButton.Visible = true;
-        _endTurnButton.Disabled = false;
-        ShowEntityVisuals(true);
-        _lastPlayerWeak = 0;
-        _lastPlayerVuln = 0;
-        _audioManager.PlayBGM(DefaultBgmPath);
+        MapNodeKind kind = _mapManager.GetNodeKind(depth, lane);
+        if (kind == MapNodeKind.Question)
+        {
+            kind = ResolveQuestionRoom();
+        }
 
-        _combatManager.StartCombat(_gameManager.Deck, depth);
-        BuildEnemyVisuals(_combatManager.ActiveEnemies);
-        _combatManager.SetEnemyTargetNodes(new List<Control>(_enemyRects));
-        _combatManager.SyncUiState();
+        _mapManager.HideMap();
+        if (kind == MapNodeKind.Combat || kind == MapNodeKind.Boss)
+        {
+            _endTurnButton.Visible = true;
+            _endTurnButton.Disabled = false;
+            ShowEntityVisuals(true);
+            _lastPlayerWeak = 0;
+            _lastPlayerVuln = 0;
+            _audioManager.PlayBGM(DefaultBgmPath);
+
+            _combatManager.StartCombat(_gameManager.Deck, depth);
+            BuildEnemyVisuals(_combatManager.ActiveEnemies);
+            _combatManager.SetEnemyTargetNodes(new List<Control>(_enemyRects));
+            _combatManager.SyncUiState();
+            return;
+        }
+
+        _endTurnButton.Visible = false;
+        ShowEntityVisuals(false);
+        ShowRoomByKind(kind);
     }
 
     private void OnCombatWon()
@@ -252,6 +281,17 @@ public partial class Main : Node
         _autoPlayButton.Pressed += OnAutoPlayTogglePressed;
         _topUiContainer.AddChild(_autoPlayButton);
         RefreshAutoPlayButton();
+
+        _deckButton = new Button
+        {
+            Text = "Deck",
+            Position = new Vector2(960, 0),
+            Size = new Vector2(90, 40),
+            CustomMinimumSize = new Vector2(90, 40),
+            MouseFilter = Control.MouseFilterEnum.Stop
+        };
+        _deckButton.Pressed += ToggleDeckOverlay;
+        _topUiContainer.AddChild(_deckButton);
 
         BuildEntityLayer(canvasLayer);
     }
@@ -709,9 +749,14 @@ public partial class Main : Node
 
     private void RefreshHud()
     {
-        _hudLabel.Text = $"Energy: {_currentEnergy}   HP: {_gameManager.PlayerHealth}/{_gameManager.MaxPlayerHealth}   Gold: {_gameManager.Gold}";
+        int potionCount = _gameManager.Potions.FindAll(p => p is not null).Count;
+        _hudLabel.Text = $"Energy: {_currentEnergy}   HP: {_gameManager.PlayerHealth}/{_gameManager.MaxPlayerHealth}   Gold: {_gameManager.Gold}   Relics: {_gameManager.Relics.Count}   Potions: {potionCount}/3";
         _playerHpLabel.Text = $"HP: {_gameManager.PlayerHealth}/{_gameManager.MaxPlayerHealth}";
         UpdatePlayerLayout();
+        if (_deckOverlay.Visible)
+        {
+            RefreshDeckOverlay();
+        }
     }
 
     private void OnAutoPlayTogglePressed()
@@ -764,6 +809,18 @@ public partial class Main : Node
                 return;
             }
 
+            if (_roomOverlay.Visible)
+            {
+                foreach (Node child in _roomContent.GetChildren())
+                {
+                    if (child is Button button)
+                    {
+                        button.EmitSignal(Button.SignalName.Pressed);
+                        return;
+                    }
+                }
+            }
+
             if (_mapManager.Visible)
             {
                 _mapManager.TrySelectFirstAvailableNode();
@@ -773,6 +830,335 @@ public partial class Main : Node
         {
             _isAutoUiFlowRunning = false;
         }
+    }
+
+    private void InitializeMetaPools()
+    {
+        _relicPool.Clear();
+        _relicPool.Add(new RelicData("relic_guard", "Stone Guard", "Start each combat with 8 Block."));
+        _relicPool.Add(new RelicData("relic_energy", "Amber Battery", "Gain +1 energy each turn."));
+        _relicPool.Add(new RelicData("relic_coin", "Golden Scarab", "Gain 20 gold immediately."));
+
+        _potionPool.Clear();
+        _potionPool.Add(new PotionData("heal_potion", "Heal Potion", "Recover 12 HP."));
+        _potionPool.Add(new PotionData("energy_potion", "Energy Potion", "Gain +1 energy next combat."));
+        _potionPool.Add(new PotionData("power_potion", "Power Potion", "Mysterious combat boost."));
+
+        _shopCardPool.Clear();
+        _shopCardPool.Add(new CardData("slice", "Slice", "Deal 7 damage.", 1, damage: 7));
+        _shopCardPool.Add(new CardData("fortify", "Fortify", "Gain 8 block.", 1, block: 8));
+        _shopCardPool.Add(new CardData("pierce", "Pierce", "Deal 5 damage twice.", 1, damage: 5, hitCount: 2));
+    }
+
+    private void BuildDeckOverlay()
+    {
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
+        _deckOverlay = new Control
+        {
+            Size = viewport,
+            CustomMinimumSize = viewport,
+            Visible = false,
+            MouseFilter = Control.MouseFilterEnum.Stop
+        };
+        AddChild(_deckOverlay);
+
+        _deckOverlay.AddChild(new ColorRect
+        {
+            Color = new Color(0f, 0f, 0f, 0.75f),
+            Size = viewport,
+            CustomMinimumSize = viewport,
+            MouseFilter = Control.MouseFilterEnum.Stop
+        });
+
+        var panel = new Panel
+        {
+            Position = new Vector2(viewport.X * 0.5f - 260f, 80f),
+            Size = new Vector2(520f, viewport.Y - 160f),
+            CustomMinimumSize = new Vector2(520f, viewport.Y - 160f),
+            MouseFilter = Control.MouseFilterEnum.Stop
+        };
+        _deckOverlay.AddChild(panel);
+
+        var closeBtn = new Button
+        {
+            Text = "Close",
+            Position = new Vector2(410, 12),
+            Size = new Vector2(90, 32)
+        };
+        closeBtn.Pressed += ToggleDeckOverlay;
+        panel.AddChild(closeBtn);
+
+        _deckListLabel = new RichTextLabel
+        {
+            Position = new Vector2(18, 52),
+            Size = new Vector2(484, panel.Size.Y - 70f),
+            ScrollActive = true,
+            BbcodeEnabled = false
+        };
+        panel.AddChild(_deckListLabel);
+    }
+
+    private void ToggleDeckOverlay()
+    {
+        _deckOverlay.Visible = !_deckOverlay.Visible;
+        if (_deckOverlay.Visible)
+        {
+            RefreshDeckOverlay();
+        }
+    }
+
+    private void RefreshDeckOverlay()
+    {
+        var lines = new List<string>
+        {
+            $"Deck: {_gameManager.Deck.Count} cards",
+            $"Gold: {_gameManager.Gold}",
+            $"Relics: {_gameManager.Relics.Count}",
+            $"Potions: {_gameManager.Potions.FindAll(p => p is not null).Count}/3",
+            ""
+        };
+
+        for (int i = 0; i < _gameManager.Deck.Count; i++)
+        {
+            CardData card = _gameManager.Deck[i];
+            lines.Add($"{i + 1}. {card.DisplayName} (Cost {card.Cost})");
+        }
+
+        _deckListLabel.Text = string.Join("\n", lines);
+    }
+
+    private void BuildRoomOverlay()
+    {
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
+        _roomOverlay = new Control
+        {
+            Size = viewport,
+            CustomMinimumSize = viewport,
+            Visible = false,
+            MouseFilter = Control.MouseFilterEnum.Stop
+        };
+        AddChild(_roomOverlay);
+
+        _roomOverlay.AddChild(new ColorRect
+        {
+            Color = new Color(0f, 0f, 0f, 0.72f),
+            Size = viewport,
+            CustomMinimumSize = viewport
+        });
+
+        var panel = new Panel
+        {
+            Position = new Vector2(viewport.X * 0.5f - 300f, viewport.Y * 0.5f - 190f),
+            Size = new Vector2(600, 380),
+            CustomMinimumSize = new Vector2(600, 380)
+        };
+        _roomOverlay.AddChild(panel);
+
+        _roomTitleLabel = new Label
+        {
+            Position = new Vector2(20, 16),
+            Size = new Vector2(560, 34),
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        _roomTitleLabel.AddThemeFontSizeOverride("font_size", 24);
+        panel.AddChild(_roomTitleLabel);
+
+        _roomContent = new VBoxContainer
+        {
+            Position = new Vector2(40, 68),
+            Size = new Vector2(520, 280),
+            CustomMinimumSize = new Vector2(520, 280)
+        };
+        _roomContent.AddThemeConstantOverride("separation", 14);
+        panel.AddChild(_roomContent);
+    }
+
+    private MapNodeKind ResolveQuestionRoom()
+    {
+        int roll = (int)GD.RandRange(0, 99);
+        if (roll < 40) return MapNodeKind.Combat;
+        if (roll < 60) return MapNodeKind.Chest;
+        if (roll < 80) return MapNodeKind.Shop;
+        return MapNodeKind.Question;
+    }
+
+    private void ShowRoomByKind(MapNodeKind kind)
+    {
+        _roomOverlay.Visible = true;
+        foreach (Node child in _roomContent.GetChildren())
+        {
+            child.QueueFree();
+        }
+
+        switch (kind)
+        {
+            case MapNodeKind.Chest:
+                ShowChestRoom();
+                break;
+            case MapNodeKind.Shop:
+                ShowShopRoom();
+                break;
+            default:
+                ShowSpecialEventRoom();
+                break;
+        }
+    }
+
+    private void ShowChestRoom()
+    {
+        _roomTitleLabel.Text = "Treasure Chest";
+        AddRoomText("Open the chest to gain a relic reward.");
+        AddRoomButton("Open Chest", () =>
+        {
+            RelicData relic = _relicPool[(int)GD.RandRange(0, _relicPool.Count - 1)];
+            bool added = _gameManager.AddRelic(relic);
+            if (relic.Id == "relic_coin")
+            {
+                _gameManager.AddGold(20);
+            }
+            AddRoomText(added ? $"Gained relic: {relic.Name}" : $"Already owned relic: {relic.Name}");
+            CompleteNonCombatRoom();
+        });
+    }
+
+    private void ShowShopRoom()
+    {
+        _roomTitleLabel.Text = "Merchant";
+        AddRoomText("Spend gold to buy cards/potions/relics or remove a card.");
+
+        AddRoomButton("Buy Card (50g)", () =>
+        {
+            if (_gameManager.Gold < 50)
+            {
+                AddRoomText("Not enough gold.");
+                return;
+            }
+
+            _gameManager.AddGold(-50);
+            CardData card = _shopCardPool[(int)GD.RandRange(0, _shopCardPool.Count - 1)].Clone();
+            _gameManager.AddCardToDeck(card);
+            AddRoomText($"Bought card: {card.DisplayName}");
+        });
+
+        AddRoomButton("Buy Potion (35g)", () =>
+        {
+            if (_gameManager.Gold < 35)
+            {
+                AddRoomText("Not enough gold.");
+                return;
+            }
+
+            if (!_gameManager.AddPotion(_potionPool[(int)GD.RandRange(0, _potionPool.Count - 1)]))
+            {
+                AddRoomText("Potion slots are full.");
+                return;
+            }
+
+            _gameManager.AddGold(-35);
+            AddRoomText("Bought a potion.");
+        });
+
+        AddRoomButton("Buy Relic (120g)", () =>
+        {
+            if (_gameManager.Gold < 120)
+            {
+                AddRoomText("Not enough gold.");
+                return;
+            }
+
+            RelicData relic = _relicPool[(int)GD.RandRange(0, _relicPool.Count - 1)];
+            if (!_gameManager.AddRelic(relic))
+            {
+                AddRoomText("Merchant has no new relic for you.");
+                return;
+            }
+
+            _gameManager.AddGold(-120);
+            AddRoomText($"Bought relic: {relic.Name}");
+        });
+
+        AddRoomButton("Remove Random Card (75g)", () =>
+        {
+            if (_gameManager.Gold < 75)
+            {
+                AddRoomText("Not enough gold.");
+                return;
+            }
+
+            if (!_gameManager.RemoveRandomCardFromDeck())
+            {
+                AddRoomText("No removable card.");
+                return;
+            }
+
+            _gameManager.AddGold(-75);
+            AddRoomText("A card was removed from your deck.");
+        });
+
+        AddRoomButton("Leave Shop", CompleteNonCombatRoom);
+    }
+
+    private void ShowSpecialEventRoom()
+    {
+        _roomTitleLabel.Text = "Special Event";
+        int roll = (int)GD.RandRange(0, 2);
+        switch (roll)
+        {
+            case 0:
+                AddRoomText("You found hidden coins (+25 gold).");
+                _gameManager.AddGold(25);
+                break;
+            case 1:
+                AddRoomText("You drink from a fountain (+10 HP).");
+                _gameManager.Heal(10);
+                break;
+            default:
+                AddRoomText("A cursed mirror scratches you (-6 HP), but grants a relic.");
+                _gameManager.LoseHealth(6);
+                _gameManager.AddRelic(_relicPool[(int)GD.RandRange(0, _relicPool.Count - 1)]);
+                break;
+        }
+
+        AddRoomButton("Continue", CompleteNonCombatRoom);
+    }
+
+    private void CompleteNonCombatRoom()
+    {
+        _roomOverlay.Visible = false;
+        _gameManager.AdvanceFloor();
+        _mapManager.ShowMap();
+        TryAutoAdvanceOutsideCombat();
+    }
+
+    private void AddRoomText(string text)
+    {
+        var label = new Label
+        {
+            Text = text,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        _roomContent.AddChild(label);
+    }
+
+    private void AddRoomButton(string text, System.Action onPressed)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Size = new Vector2(300, 34),
+            CustomMinimumSize = new Vector2(300, 34)
+        };
+        button.Pressed += () =>
+        {
+            AudioManager.Instance?.PlaySFX("res://Audio/click.ogg");
+            onPressed();
+            RefreshHud();
+            if (_deckOverlay.Visible)
+            {
+                RefreshDeckOverlay();
+            }
+        };
+        _roomContent.AddChild(button);
     }
 
     private void OnPlayerAttackPerformed(int targetIndex)

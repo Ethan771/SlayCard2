@@ -73,6 +73,7 @@ public partial class CombatManager : Control
         _playerBlock = 0;
         _playerWeakStacks = 0;
         _playerVulnerableStacks = 0;
+        ApplyPreCombatRelicEffects();
 
         int enemyCount = RollEnemyCountByFloor(floorIndex);
         float countScaling = enemyCount switch
@@ -177,7 +178,7 @@ public partial class CombatManager : Control
     {
         _autoPlaySessionId++;
         _isPlayerTurn = true;
-        _energy = 3;
+        _energy = 3 + GetRelicEnergyBonus();
         _playerBlock = 0;
 
         for (int i = 0; i < _enemyBlocks.Count; i++)
@@ -1001,5 +1002,18 @@ public partial class CombatManager : Control
         }
 
         return roll < 20 ? 2 : 3;
+    }
+
+    private void ApplyPreCombatRelicEffects()
+    {
+        if (_gameManager.Relics.Exists(r => r.Id == "relic_guard"))
+        {
+            _playerBlock += 8;
+        }
+    }
+
+    private int GetRelicEnergyBonus()
+    {
+        return _gameManager.Relics.Exists(r => r.Id == "relic_energy") ? 1 : 0;
     }
 }

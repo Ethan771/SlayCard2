@@ -9,6 +9,15 @@ public enum MapNodeState
     Completed
 }
 
+public enum MapNodeKind
+{
+    Combat,
+    Question,
+    Chest,
+    Shop,
+    Boss
+}
+
 // 地图管理器：纯代码生成树状路线按钮。
 public partial class MapManager : Control
 {
@@ -17,6 +26,8 @@ public partial class MapManager : Control
     private readonly Vector2 _nodeSize = new(120, 46);
     private readonly int[] _lanesPerDepth = { 1, 2, 3, 2, 1 };
     private readonly System.Collections.Generic.Dictionary<(int depth, int lane), Button> _nodeButtons = new();
+    private readonly System.Collections.Generic.Dictionary<(int depth, int lane), MapNodeKind> _nodeKinds = new();
+    private readonly RandomNumberGenerator _rng = new();
 
     public override void _Ready()
     {
@@ -108,9 +119,11 @@ public partial class MapManager : Control
             int laneCount = _lanesPerDepth[depth];
             for (int lane = 0; lane < laneCount; lane++)
             {
+                MapNodeKind kind = RollNodeKind(depth);
+                _nodeKinds[(depth, lane)] = kind;
                 var button = new Button
                 {
-                    Text = depth == _lanesPerDepth.Length - 1 ? "Boss" : $"Fight {depth + 1}-{lane + 1}",
+                    Text = GetNodeBaseText(depth, lane),
                     Size = _nodeSize,
                     CustomMinimumSize = _nodeSize,
                     MouseFilter = MouseFilterEnum.Stop
@@ -143,7 +156,7 @@ public partial class MapManager : Control
     private void ApplyNodeVisualState(int depth, int lane, MapNodeState state)
     {
         Button button = _nodeButtons[(depth, lane)];
-        string baseText = depth == _lanesPerDepth.Length - 1 ? "Boss" : $"Fight {depth + 1}-{lane + 1}";
+        string baseText = GetNodeBaseText(depth, lane);
 
         switch (state)
         {
@@ -163,5 +176,50 @@ public partial class MapManager : Control
                 button.Modulate = new Color(0.52f, 0.56f, 0.62f, 0.45f);
                 break;
         }
+    }
+
+    public MapNodeKind GetNodeKind(int depth, int lane)
+    {
+        return _nodeKinds.TryGetValue((depth, lane), out MapNodeKind kind)
+            ? kind
+            : MapNodeKind.Combat;
+    }
+
+    private MapNodeKind RollNodeKind(int depth)
+    {
+        if (depth == _lanesPerDepth.Length - 1)
+        {
+            return MapNodeKind.Boss;
+        }
+
+        int roll = _rng.RandiRange(0, 99);
+        if (roll < 50)
+        {
+            return MapNodeKind.Combat;
+        }
+        if (roll < 70)
+        {
+            return MapNodeKind.Question;
+        }
+        if (roll < 85)
+        {
+            return MapNodeKind.Chest;
+        }
+
+        return MapNodeKind.Shop;
+    }
+
+    private string GetNodeBaseText(int depth, int lane)
+    {
+        MapNodeKind kind = GetNodeKind(depth, lane);
+        return kind switch
+        {
+            MapNodeKind.Boss => "Boss",
+            MapNodeKind.Combat => $"Fight {depth + 1}-{lane + 1}",
+            MapNodeKind.Question => $"? {depth + 1}-{lane + 1}",
+            MapNodeKind.Chest => $"Chest {depth + 1}-{lane + 1}",
+            MapNodeKind.Shop => $"Shop {depth + 1}-{lane + 1}",
+            _ => $"Node {depth + 1}-{lane + 1}"
+        };
     }
 }

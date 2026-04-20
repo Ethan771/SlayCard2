@@ -11,8 +11,12 @@ public partial class GameManager : Node
     [Signal] public delegate void DeckChangedEventHandler();
     [Signal] public delegate void FloorIndexChangedEventHandler(int floorIndex);
     [Signal] public delegate void PlayerDiedEventHandler();
+    [Signal] public delegate void RelicsChangedEventHandler();
+    [Signal] public delegate void PotionsChangedEventHandler();
 
     public List<CardData> Deck { get; } = new();
+    public List<RelicData> Relics { get; } = new();
+    public List<PotionData?> Potions { get; } = new() { null, null, null };
     public int Gold { get; private set; }
     public int PlayerHealth { get; private set; }
     public int MaxPlayerHealth { get; private set; } = 80;
@@ -29,6 +33,11 @@ public partial class GameManager : Node
         Gold = 0;
         PlayerHealth = MaxPlayerHealth;
         CurrentFloorIndex = 0;
+        Relics.Clear();
+        for (int i = 0; i < Potions.Count; i++)
+        {
+            Potions[i] = null;
+        }
 
         for (int i = 0; i < 4; i++)
         {
@@ -49,6 +58,8 @@ public partial class GameManager : Node
         EmitSignal(SignalName.GoldChanged, Gold);
         EmitSignal(SignalName.PlayerHealthChanged, PlayerHealth);
         EmitSignal(SignalName.FloorIndexChanged, CurrentFloorIndex);
+        EmitSignal(SignalName.RelicsChanged);
+        EmitSignal(SignalName.PotionsChanged);
     }
 
     public void ResetRun()
@@ -88,5 +99,44 @@ public partial class GameManager : Node
     {
         CurrentFloorIndex += 1;
         EmitSignal(SignalName.FloorIndexChanged, CurrentFloorIndex);
+    }
+
+    public bool AddRelic(RelicData relic)
+    {
+        if (Relics.Exists(r => r.Id == relic.Id))
+        {
+            return false;
+        }
+
+        Relics.Add(relic);
+        EmitSignal(SignalName.RelicsChanged);
+        return true;
+    }
+
+    public bool AddPotion(PotionData potion)
+    {
+        for (int i = 0; i < Potions.Count; i++)
+        {
+            if (Potions[i] is null)
+            {
+                Potions[i] = potion;
+                EmitSignal(SignalName.PotionsChanged);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool RemoveRandomCardFromDeck()
+    {
+        if (Deck.Count <= 1)
+        {
+            return false;
+        }
+
+        Deck.RemoveAt((int)GD.RandRange(0, Deck.Count - 1));
+        EmitSignal(SignalName.DeckChanged);
+        return true;
     }
 }
