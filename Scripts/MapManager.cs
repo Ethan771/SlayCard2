@@ -128,6 +128,7 @@ public partial class MapManager : Control
                 {
                     if (!button.Disabled)
                     {
+                        AudioManager.Instance?.PlaySFX("res://Audio/click.ogg");
                         EmitSignal(SignalName.NodeSelected, depthCapture, laneCapture);
                     }
                 };

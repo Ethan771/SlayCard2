@@ -57,6 +57,7 @@ public partial class CardUI : Control
     {
         if ((IsRewardCard || !EnableDragging) && @event is InputEventMouseButton clickButton && clickButton.ButtonIndex == MouseButton.Left && !clickButton.Pressed)
         {
+            AudioManager.Instance?.PlaySFX("res://Audio/click.ogg");
             EmitSignal(SignalName.CardClicked, this);
             return;
         }
@@ -66,7 +67,7 @@ public partial class CardUI : Control
             if (mouseButton.Pressed)
             {
                 EmitSignal(SignalName.ManualInteraction, this);
-                AudioManager.Instance?.PlaySFX("res://Audio/card_slide.wav");
+                AudioManager.Instance?.PlaySFX("res://Audio/click.ogg");
                 _isDragging = true;
                 _dragOffset = GetGlobalMousePosition() - GlobalPosition;
                 _originalPosition = Position;
@@ -171,7 +172,6 @@ public partial class CardUI : Control
             return;
         }
 
-        AudioManager.Instance?.PlaySFX("res://Audio/card_slide.wav");
         _isHoverRaised = true;
         _originalZIndex = ZIndex;
         ZIndex = 2000;

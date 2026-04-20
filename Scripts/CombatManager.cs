@@ -247,6 +247,7 @@ public partial class CombatManager : Control
             CardData card = _drawPile[0];
             _drawPile.RemoveAt(0);
             _hand.Add(card);
+            AudioManager.Instance?.PlaySFX("res://Audio/card.ogg");
         }
     }
 
@@ -271,7 +272,6 @@ public partial class CombatManager : Control
         if (card.Block > 0)
         {
             _playerBlock += card.Block;
-            AudioManager.Instance?.PlaySFX("res://Audio/block.wav");
         }
 
         if (card.EnergyAmount > 0)
@@ -368,7 +368,7 @@ public partial class CombatManager : Control
 
         if (damageToHealth > 0 || blocked > 0)
         {
-            AudioManager.Instance?.PlaySFX("res://Audio/hit.wav");
+            AudioManager.Instance?.PlaySFX("res://Audio/hit.ogg");
         }
 
         Vector2 viewport = GetViewport().GetVisibleRect().Size;
@@ -406,6 +406,11 @@ public partial class CombatManager : Control
         if (damageToHealth > 0)
         {
             _gameManager.LoseHealth(damageToHealth);
+        }
+
+        if (damageToHealth > 0 || blocked > 0)
+        {
+            AudioManager.Instance?.PlaySFX("res://Audio/hit.ogg");
         }
 
         EmitSignal(SignalName.PlayerDamaged, new Vector2(120, 80), damageToHealth);

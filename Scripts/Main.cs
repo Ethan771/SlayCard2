@@ -8,6 +8,7 @@ public partial class Main : Node
 {
     private static readonly Color PlayerBaseColor = new(0.60f, 0.55f, 0.70f);
     private static readonly Color EnemyBaseColor = new(0.65f, 0.50f, 0.50f);
+    private const string DefaultBgmPath = "res://Audio/bgm.ogg";
 
     private AudioManager _audioManager = null!;
     private GameManager _gameManager = null!;
@@ -51,7 +52,7 @@ public partial class Main : Node
     {
         _audioManager = new AudioManager();
         AddChild(_audioManager);
-        _audioManager.PlayBGM("res://Audio/bgm.ogg");
+        _audioManager.PlayBGM(DefaultBgmPath);
 
         BuildHud();
         BuildDeathOverlay();
@@ -130,7 +131,7 @@ public partial class Main : Node
         ShowEntityVisuals(true);
         _lastPlayerWeak = 0;
         _lastPlayerVuln = 0;
-        _audioManager.PlayBGM("res://Audio/bgm.ogg");
+        _audioManager.PlayBGM(DefaultBgmPath);
 
         _combatManager.StartCombat(_gameManager.Deck, depth);
         BuildEnemyVisuals(_combatManager.ActiveEnemies);
@@ -149,7 +150,6 @@ public partial class Main : Node
 
         EnsureRewardManager();
         _rewardManager.ShowRewards();
-        _audioManager.PlaySFX("res://Audio/victory.wav");
         TryAutoAdvanceOutsideCombat();
     }
 

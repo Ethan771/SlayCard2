@@ -9,6 +9,8 @@ public partial class AudioManager : Node
     public static AudioManager? Instance { get; private set; }
 
     private readonly List<AudioStreamPlayer> _sfxPool = new();
+    private readonly Dictionary<string, AudioStream?> _streamCache = new();
+    private readonly HashSet<string> _missingLogged = new();
     private AudioStreamPlayer _bgmPlayer = null!;
     private string _currentBgmPath = string.Empty;
 
@@ -28,15 +30,8 @@ public partial class AudioManager : Node
 
     public void PlayBGM(string path)
     {
-        if (string.IsNullOrEmpty(path))
+        if (!TryGetStream(path, out AudioStream? stream))
         {
-            return;
-        }
-
-        AudioStream? stream = GD.Load<AudioStream>(path);
-        if (stream is null)
-        {
-            GD.PrintErr($"BGM load failed: {path}");
             return;
         }
 
@@ -52,15 +47,8 @@ public partial class AudioManager : Node
 
     public void PlaySFX(string path)
     {
-        if (string.IsNullOrEmpty(path))
+        if (!TryGetStream(path, out AudioStream? stream))
         {
-            return;
-        }
-
-        AudioStream? stream = GD.Load<AudioStream>(path);
-        if (stream is null)
-        {
-            GD.PrintErr($"SFX load failed: {path}");
             return;
         }
 
@@ -104,5 +92,33 @@ public partial class AudioManager : Node
             AddChild(player);
             _sfxPool.Add(player);
         }
+    }
+
+    private bool TryGetStream(string path, out AudioStream? stream)
+    {
+        stream = null;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        if (_streamCache.TryGetValue(path, out AudioStream? cached))
+        {
+            stream = cached;
+            return stream is not null;
+        }
+
+        stream = GD.Load<AudioStream>(path);
+        _streamCache[path] = stream;
+        if (stream is null)
+        {
+            if (_missingLogged.Add(path))
+            {
+                GD.PrintErr($"Audio load failed: {path}");
+            }
+            return false;
+        }
+
+        return true;
     }
 }

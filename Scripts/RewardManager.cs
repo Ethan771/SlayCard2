@@ -162,6 +162,7 @@ public partial class RewardManager : Control
 
     private void OnSkipPressed()
     {
+        AudioManager.Instance?.PlaySFX("res://Audio/click.ogg");
         EmitSignal(SignalName.RewardSkipped);
         QueueFree();
     }
