@@ -639,7 +639,7 @@ public partial class Main : Node
         _playerWeakLabel.Visible = playerWeak > 0;
         if (playerWeak > _lastPlayerWeak)
         {
-            _vfxManager.PlayFloatingText(_playerRect.GlobalPosition + new Vector2(_playerRect.Size.X * 0.5f, -20f), $"+Weak {playerWeak - _lastPlayerWeak}", Colors.LightGoldenrodYellow);
+            _vfxManager.PlayFloatingText(_playerRect.GlobalPosition + new Vector2(_playerRect.Size.X * 0.5f, -20f), $"+Weak {playerWeak - _lastPlayerWeak}", new Color(0.98f, 0.92f, 0.55f));
         }
         _lastPlayerWeak = playerWeak;
 
@@ -670,7 +670,7 @@ public partial class Main : Node
             _enemyWeakLabels[i].Visible = weakValue > 0;
             if (i < _lastEnemyWeakStacks.Count && weakValue > _lastEnemyWeakStacks[i])
             {
-                _vfxManager.PlayFloatingText(_enemyRects[i].GlobalPosition + new Vector2(_enemyRects[i].Size.X * 0.5f, -18f), $"+Weak {weakValue - _lastEnemyWeakStacks[i]}", Colors.LightGoldenrodYellow);
+                _vfxManager.PlayFloatingText(_enemyRects[i].GlobalPosition + new Vector2(_enemyRects[i].Size.X * 0.5f, -18f), $"+Weak {weakValue - _lastEnemyWeakStacks[i]}", new Color(0.98f, 0.92f, 0.55f));
             }
             if (i < _lastEnemyWeakStacks.Count)
             {
