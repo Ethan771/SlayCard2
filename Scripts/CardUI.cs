@@ -6,7 +6,6 @@ namespace SlayCard;
 public partial class CardUI : Control
 {
     [Signal] public delegate void CardReleasedEventHandler(CardUI cardUi, bool shouldPlay);
-    [Signal] public delegate void CardClickedEventHandler(CardUI cardUi);
 
     private static readonly Color AttackColor = new(0.75f, 0.45f, 0.45f);
     private static readonly Color BlockColor = new(0.45f, 0.55f, 0.70f);
@@ -14,7 +13,6 @@ public partial class CardUI : Control
     private static readonly Vector2 CardSize = new(125, 180);
 
     public CardData CardData { get; private set; } = new();
-    public bool EnableDragging { get; set; } = true;
 
     private ColorRect _backgroundRect = null!;
     private Label _nameLabel = null!;
@@ -51,12 +49,6 @@ public partial class CardUI : Control
 
     public override void _GuiInput(InputEvent @event)
     {
-        if (!EnableDragging && @event is InputEventMouseButton clickButton && clickButton.ButtonIndex == MouseButton.Left && !clickButton.Pressed)
-        {
-            EmitSignal(SignalName.CardClicked, this);
-            return;
-        }
-
         if (@event is InputEventMouseButton mouseButton && mouseButton.ButtonIndex == MouseButton.Left)
         {
             if (mouseButton.Pressed)
