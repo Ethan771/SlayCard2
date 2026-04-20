@@ -265,6 +265,17 @@ public partial class MapManager : Control
         float projected = normalized * (currentCount - 1);
         int left = Mathf.Clamp(Mathf.FloorToInt(projected), 0, currentCount - 1);
         int right = Mathf.Clamp(Mathf.CeilToInt(projected), 0, currentCount - 1);
+        if (left == right)
+        {
+            if (right < currentCount - 1)
+            {
+                right += 1;
+            }
+            else if (left > 0)
+            {
+                left -= 1;
+            }
+        }
 
         return lane == left || lane == right;
     }

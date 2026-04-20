@@ -840,14 +840,27 @@ public partial class Main : Node
 
     private void RefreshPotionButtons()
     {
-        bool usable = _combatManager != null && _combatManager.Visible && _combatManager.IsPlayerTurn;
+        bool inCombat = _combatManager != null && _combatManager.Visible;
+        bool usable = inCombat && _combatManager.IsPlayerTurn;
         for (int i = 0; i < _potionButtons.Count; i++)
         {
             Button button = _potionButtons[i];
             PotionData? potion = i < _gameManager.Potions.Count ? _gameManager.Potions[i] : null;
-            button.Text = potion is null ? $"P{i + 1}: Empty" : $"P{i + 1}: {potion.Name}";
+            button.Visible = inCombat;
+            button.Text = potion is null ? $"P{i + 1}: Empty" : $"P{i + 1}: {GetPotionShortName(potion)}";
             button.Disabled = potion is null || !usable;
         }
+    }
+
+    private static string GetPotionShortName(PotionData potion)
+    {
+        return potion.Id switch
+        {
+            "heal_potion" => "Heal",
+            "energy_potion" => "Energy",
+            "power_potion" => "Power",
+            _ => potion.Name
+        };
     }
 
     private void TryUsePotion(int slotIndex)
