@@ -858,7 +858,9 @@ public partial class Main : Node
             Size = viewport,
             CustomMinimumSize = viewport,
             Visible = false,
-            MouseFilter = Control.MouseFilterEnum.Stop
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            ZIndex = 9000,
+            ZAsRelative = false
         };
         AddChild(_deckOverlay);
 
@@ -903,6 +905,7 @@ public partial class Main : Node
         _deckOverlay.Visible = !_deckOverlay.Visible;
         if (_deckOverlay.Visible)
         {
+            _deckOverlay.Raise();
             RefreshDeckOverlay();
         }
     }
@@ -917,6 +920,28 @@ public partial class Main : Node
             $"Potions: {_gameManager.Potions.FindAll(p => p is not null).Count}/3",
             ""
         };
+
+        if (_gameManager.Relics.Count > 0)
+        {
+            lines.Add("== Relics ==");
+            foreach (RelicData relic in _gameManager.Relics)
+            {
+                lines.Add($"- {relic.Name}: {relic.Description}");
+            }
+            lines.Add("");
+        }
+
+        lines.Add("== Potions ==");
+        for (int i = 0; i < _gameManager.Potions.Count; i++)
+        {
+            PotionData? potion = _gameManager.Potions[i];
+            lines.Add(potion is null
+                ? $"Slot {i + 1}: [Empty]"
+                : $"Slot {i + 1}: {potion.Name} - {potion.Description}");
+        }
+
+        lines.Add("");
+        lines.Add("== Deck ==");
 
         for (int i = 0; i < _gameManager.Deck.Count; i++)
         {

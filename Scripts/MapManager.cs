@@ -24,7 +24,7 @@ public partial class MapManager : Control
     [Signal] public delegate void NodeSelectedEventHandler(int depth, int lane);
 
     private readonly Vector2 _nodeSize = new(120, 46);
-    private readonly int[] _lanesPerDepth = { 1, 2, 3, 2, 1 };
+    private readonly int[] _lanesPerDepth = { 1, 2, 3, 2, 3, 2, 3, 2, 2, 1 };
     private readonly System.Collections.Generic.Dictionary<(int depth, int lane), Button> _nodeButtons = new();
     private readonly System.Collections.Generic.Dictionary<(int depth, int lane), MapNodeKind> _nodeKinds = new();
     private readonly RandomNumberGenerator _rng = new();
@@ -129,9 +129,12 @@ public partial class MapManager : Control
                     MouseFilter = MouseFilterEnum.Stop
                 };
 
-                float x = 220 + depth * 190;
-                float yBase = viewport.Y * 0.5f;
-                float y = yBase + (lane - (laneCount - 1) / 2.0f) * 120;
+                float yBottom = viewport.Y * 0.82f;
+                float spacingY = viewport.Y * 0.075f;
+                float y = yBottom - depth * spacingY;
+                float xCenter = viewport.X * 0.5f;
+                float xSpread = 170f;
+                float x = xCenter + (lane - (laneCount - 1) / 2.0f) * xSpread;
                 button.Position = new Vector2(x, y);
                 button.Modulate = new Color(0.9f, 0.9f, 0.9f);
 
