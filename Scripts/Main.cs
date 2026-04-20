@@ -1269,25 +1269,67 @@ public partial class Main : Node
             AddRoomText($"Bought relic: {relic.Name}");
         });
 
-        AddRoomButton("Remove Random Card (45g)", () =>
+        AddRoomButton("Remove Card (45g)", () =>
         {
             if (_gameManager.Gold < 45)
             {
                 AddRoomText("Not enough gold.");
                 return;
             }
-
-            if (!_gameManager.RemoveRandomCardFromDeck())
-            {
-                AddRoomText("No removable card.");
-                return;
-            }
-
-            _gameManager.AddGold(-45);
-            AddRoomText("A card was removed from your deck.");
+            ShowCardRemovalChoice();
         });
 
         AddRoomButton("Leave Shop", CompleteNonCombatRoom);
+    }
+
+    private void ShowCardRemovalChoice()
+    {
+        foreach (Node child in _roomContent.GetChildren())
+        {
+            child.QueueFree();
+        }
+
+        _roomTitleLabel.Text = "Remove a Card";
+        AddRoomText("Choose 1 card to remove for 45 gold.");
+
+        var removable = new List<(int index, CardData card)>();
+        for (int i = 0; i < _gameManager.Deck.Count; i++)
+        {
+            removable.Add((i, _gameManager.Deck[i]));
+        }
+
+        if (removable.Count <= 1)
+        {
+            AddRoomText("No removable card.");
+            AddRoomButton("Back to Shop", ShowShopRoom);
+            return;
+        }
+
+        foreach ((int index, CardData card) in removable)
+        {
+            int removeIndex = index;
+            CardData cardData = card;
+            AddRoomButton($"Remove {cardData.DisplayName} (Cost {cardData.Cost})", () =>
+            {
+                if (_gameManager.Gold < 45)
+                {
+                    AddRoomText("Not enough gold.");
+                    return;
+                }
+
+                if (!_gameManager.RemoveCardAt(removeIndex))
+                {
+                    AddRoomText("That card is no longer removable.");
+                    return;
+                }
+
+                _gameManager.AddGold(-45);
+                AddRoomText($"Removed card: {cardData.DisplayName}");
+                ShowShopRoom();
+            });
+        }
+
+        AddRoomButton("Cancel", ShowShopRoom);
     }
 
     private void ShowSpecialEventRoom()

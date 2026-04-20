@@ -170,4 +170,16 @@ public partial class GameManager : Node
         EmitSignal(SignalName.DeckChanged);
         return true;
     }
+
+    public bool RemoveCardAt(int index)
+    {
+        if (index < 0 || index >= Deck.Count || Deck.Count <= 1)
+        {
+            return false;
+        }
+
+        Deck.RemoveAt(index);
+        EmitSignal(SignalName.DeckChanged);
+        return true;
+    }
 }
