@@ -15,6 +15,7 @@ public enum MapNodeKind
     Question,
     Chest,
     Shop,
+    Campfire,
     Boss
 }
 
@@ -195,6 +196,12 @@ public partial class MapManager : Control
             return MapNodeKind.Boss;
         }
 
+        // 第6层节点（索引5）固定火堆，Boss前一层（索引8）固定火堆。
+        if (depth == 5 || depth == _lanesPerDepth.Length - 2)
+        {
+            return MapNodeKind.Campfire;
+        }
+
         int roll = _rng.RandiRange(0, 99);
         if (roll < 50)
         {
@@ -207,6 +214,11 @@ public partial class MapManager : Control
         if (roll < 85)
         {
             return MapNodeKind.Chest;
+        }
+
+        if (depth < 3)
+        {
+            return MapNodeKind.Combat;
         }
 
         return MapNodeKind.Shop;
@@ -222,6 +234,7 @@ public partial class MapManager : Control
             MapNodeKind.Question => $"? {depth + 1}-{lane + 1}",
             MapNodeKind.Chest => $"Chest {depth + 1}-{lane + 1}",
             MapNodeKind.Shop => $"Shop {depth + 1}-{lane + 1}",
+            MapNodeKind.Campfire => $"Rest {depth + 1}-{lane + 1}",
             _ => $"Node {depth + 1}-{lane + 1}"
         };
     }
