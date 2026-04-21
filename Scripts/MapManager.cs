@@ -29,6 +29,7 @@ public partial class MapManager : Control
     private readonly System.Collections.Generic.Dictionary<(int depth, int lane), Button> _nodeButtons = new();
     private readonly System.Collections.Generic.Dictionary<(int depth, int lane), MapNodeKind> _nodeKinds = new();
     private readonly System.Collections.Generic.Dictionary<int, int> _selectedLaneByDepth = new();
+    private readonly System.Collections.Generic.Dictionary<int, int> _forcedShopLaneByDepth = new();
     private readonly RandomNumberGenerator _rng = new();
 
     public override void _Ready()
@@ -110,6 +111,7 @@ public partial class MapManager : Control
     private void BuildMapUi()
     {
         Vector2 viewport = GetViewport().GetVisibleRect().Size;
+        ConfigureForcedShopLanes();
 
         var bg = new ColorRect
         {
@@ -135,7 +137,11 @@ public partial class MapManager : Control
             int laneCount = _lanesPerDepth[depth];
             for (int lane = 0; lane < laneCount; lane++)
             {
-                MapNodeKind kind = RollNodeKind(depth);
+                bool hasForcedShop = _forcedShopLaneByDepth.TryGetValue(depth, out int forcedShopLane);
+                bool isForcedShop = hasForcedShop && lane == forcedShopLane;
+                MapNodeKind kind = isForcedShop
+                    ? MapNodeKind.Shop
+                    : RollNodeKind(depth, allowShop: !hasForcedShop);
                 _nodeKinds[(depth, lane)] = kind;
                 var button = new Button
                 {
@@ -205,7 +211,7 @@ public partial class MapManager : Control
             : MapNodeKind.Combat;
     }
 
-    private MapNodeKind RollNodeKind(int depth)
+    private MapNodeKind RollNodeKind(int depth, bool allowShop = true)
     {
         if (depth == _lanesPerDepth.Length - 1)
         {
@@ -237,7 +243,70 @@ public partial class MapManager : Control
             return MapNodeKind.Combat;
         }
 
-        return MapNodeKind.Shop;
+        return allowShop ? MapNodeKind.Shop : MapNodeKind.Combat;
+    }
+
+    private void ConfigureForcedShopLanes()
+    {
+        _forcedShopLaneByDepth.Clear();
+
+        // 1-based floor 4 and 8 => depth index 3 and 7.
+        int[] forcedShopDepths = { 3, 7 };
+        foreach (int depth in forcedShopDepths)
+        {
+            if (depth < 0 || depth >= _lanesPerDepth.Length)
+            {
+                continue;
+            }
+
+            if (depth == _lanesPerDepth.Length - 1 || depth == 5 || depth == _lanesPerDepth.Length - 2)
+            {
+                continue;
+            }
+
+            int laneCount = _lanesPerDepth[depth];
+            _forcedShopLaneByDepth[depth] = _rng.RandiRange(0, laneCount - 1);
+        }
+    }
+
+    private bool IsLaneReachable(int depth, int lane)
+    {
+        if (depth <= 0)
+        {
+            return true;
+        }
+
+        if (!_selectedLaneByDepth.TryGetValue(depth - 1, out int previousLane))
+        {
+            return true;
+        }
+
+        int previousCount = _lanesPerDepth[depth - 1];
+        int currentCount = _lanesPerDepth[depth];
+        if (currentCount <= 1)
+        {
+            return lane == 0;
+        }
+
+        float normalized = previousCount <= 1
+            ? 0.5f
+            : previousLane / (float)(previousCount - 1);
+        float projected = normalized * (currentCount - 1);
+        int left = Mathf.Clamp(Mathf.FloorToInt(projected), 0, currentCount - 1);
+        int right = Mathf.Clamp(Mathf.CeilToInt(projected), 0, currentCount - 1);
+        if (left == right)
+        {
+            if (right < currentCount - 1)
+            {
+                right += 1;
+            }
+            else if (left > 0)
+            {
+                left -= 1;
+            }
+        }
+
+        return lane == left || lane == right;
     }
 
     private bool IsLaneReachable(int depth, int lane)
