@@ -128,6 +128,37 @@ public partial class GameManager : Node
         return false;
     }
 
+    public bool RemovePotionAt(int index)
+    {
+        if (index < 0 || index >= Potions.Count || Potions[index] is null)
+        {
+            return false;
+        }
+
+        Potions[index] = null;
+        EmitSignal(SignalName.PotionsChanged);
+        return true;
+    }
+
+    public void RestoreCombatEntryState(int playerHealth, IReadOnlyList<PotionData?> potions)
+    {
+        PlayerHealth = Mathf.Clamp(playerHealth, 0, MaxPlayerHealth);
+
+        int count = Mathf.Min(Potions.Count, potions.Count);
+        for (int i = 0; i < count; i++)
+        {
+            Potions[i] = potions[i];
+        }
+
+        for (int i = count; i < Potions.Count; i++)
+        {
+            Potions[i] = null;
+        }
+
+        EmitSignal(SignalName.PlayerHealthChanged, PlayerHealth);
+        EmitSignal(SignalName.PotionsChanged);
+    }
+
     public bool RemoveRandomCardFromDeck()
     {
         if (Deck.Count <= 1)
@@ -136,6 +167,18 @@ public partial class GameManager : Node
         }
 
         Deck.RemoveAt((int)GD.RandRange(0, Deck.Count - 1));
+        EmitSignal(SignalName.DeckChanged);
+        return true;
+    }
+
+    public bool RemoveCardAt(int index)
+    {
+        if (index < 0 || index >= Deck.Count || Deck.Count <= 1)
+        {
+            return false;
+        }
+
+        Deck.RemoveAt(index);
         EmitSignal(SignalName.DeckChanged);
         return true;
     }

@@ -78,14 +78,14 @@ public partial class CombatManager : Control
         int enemyCount = RollEnemyCountByFloor(floorIndex);
         float countScaling = enemyCount switch
         {
-            1 => 1.30f,
+            1 => 1.22f,
             2 => 1.00f,
-            _ => 0.78f
+            _ => 0.82f
         };
         for (int i = 0; i < enemyCount; i++)
         {
-            int hp = Mathf.RoundToInt((24 + floorIndex * 5) * countScaling) + _rng.Next(0, 3);
-            int atk = Mathf.RoundToInt((6 + floorIndex * 1.2f) * (0.95f + countScaling * 0.08f)) + _rng.Next(0, 2);
+            int hp = Mathf.RoundToInt((22 + floorIndex * 4.2f) * countScaling) + _rng.Next(0, 2);
+            int atk = Mathf.RoundToInt((5 + floorIndex * 1.0f) * (0.92f + countScaling * 0.07f)) + _rng.Next(0, 2);
             hp = Mathf.Max(10, hp);
             atk = Mathf.Max(3, atk);
             ActiveEnemies.Add(new EnemyData($"enemy_{floorIndex}_{i}", "Slime", hp, atk));
@@ -227,6 +227,30 @@ public partial class CombatManager : Control
         }
 
         EndPlayerTurn();
+    }
+
+    public bool GainPlayerEnergy(int amount)
+    {
+        if (!_isPlayerTurn || !Visible || amount <= 0)
+        {
+            return false;
+        }
+
+        _energy += amount;
+        UpdateCombatState();
+        return true;
+    }
+
+    public bool GainPlayerBlock(int amount)
+    {
+        if (!_isPlayerTurn || !Visible || amount <= 0)
+        {
+            return false;
+        }
+
+        _playerBlock += amount;
+        UpdateCombatState();
+        return true;
     }
 
     private void DrawCards(int count)
@@ -536,10 +560,10 @@ public partial class CombatManager : Control
                 _enemyIntents[i] = new EnemyIntent
                 {
                     Type = EnemyIntentType.Attack,
-                    Damage = enemy.BaseAttack + _rng.Next(0, 3),
+                    Damage = enemy.BaseAttack + _rng.Next(0, 2),
                     HitCount = 1,
                     Block = 0,
-                    ApplyVulnerable = _rng.Next(100) < 15 ? 1 : 0
+                    ApplyVulnerable = _rng.Next(100) < 10 ? 1 : 0
                 };
             }
             else if (roll < 65)
@@ -547,7 +571,7 @@ public partial class CombatManager : Control
                 _enemyIntents[i] = new EnemyIntent
                 {
                     Type = EnemyIntentType.Attack,
-                    Damage = Mathf.Max(1, enemy.BaseAttack - 2 + _rng.Next(0, 2)),
+                    Damage = Mathf.Max(1, enemy.BaseAttack - 3 + _rng.Next(0, 2)),
                     HitCount = _rng.Next(2, 4),
                     Block = 0,
                     ApplyVulnerable = 0
