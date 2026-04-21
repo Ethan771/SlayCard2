@@ -309,6 +309,46 @@ public partial class MapManager : Control
         return lane == left || lane == right;
     }
 
+    private bool IsLaneReachable(int depth, int lane)
+    {
+        if (depth <= 0)
+        {
+            return true;
+        }
+
+        if (!_selectedLaneByDepth.TryGetValue(depth - 1, out int previousLane))
+        {
+            return true;
+        }
+
+        int previousCount = _lanesPerDepth[depth - 1];
+        int currentCount = _lanesPerDepth[depth];
+        if (currentCount <= 1)
+        {
+            return lane == 0;
+        }
+
+        float normalized = previousCount <= 1
+            ? 0.5f
+            : previousLane / (float)(previousCount - 1);
+        float projected = normalized * (currentCount - 1);
+        int left = Mathf.Clamp(Mathf.FloorToInt(projected), 0, currentCount - 1);
+        int right = Mathf.Clamp(Mathf.CeilToInt(projected), 0, currentCount - 1);
+        if (left == right)
+        {
+            if (right < currentCount - 1)
+            {
+                right += 1;
+            }
+            else if (left > 0)
+            {
+                left -= 1;
+            }
+        }
+
+        return lane == left || lane == right;
+    }
+
     private string GetNodeBaseText(int depth, int lane)
     {
         MapNodeKind kind = GetNodeKind(depth, lane);
